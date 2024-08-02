@@ -1,7 +1,8 @@
 /*
- *  Handle duplicate letters!
- *  Allow user to replay game if they so wish at 
+ * Handle duplicate letters!
+ * Allow user to replay game if they so wish at 
  *      the end of the loop
+ * Store original console mode, and set that when we exit
  */
 
 #include <stdio.h>
@@ -29,6 +30,7 @@ int checkInputAgainstAnswer(char* input, char* answer);
 void printText(char text, int color);
 void printTextArray(char* text, int color);
 int isLetterInWord(letter, answer);
+void clearScreen(void);
 
 int main()
 {
@@ -51,8 +53,7 @@ int main()
 
     int numCorrectLetters = 0;
     int numGuesses = 0;
-    while (numCorrectLetters < WORD_LENGTH &&
-           numGuesses < NUM_GUESSES)
+    while (1)
     {
         printf(
             "Guess a %d-letter word, or press q to quit: ",
@@ -81,25 +82,93 @@ int main()
                 );
             numGuesses++;
         }
-    }
 
-    // They won
-    if (numCorrectLetters == WORD_LENGTH)
-    {
-        printTextArray(
-            "Congratulations, you've won!\n",
-            TEXT_GREEN
-        );
-    }
+        // They won
+        if (numCorrectLetters == WORD_LENGTH)
+        {
+            printTextArray(
+                "Congratulations, you've won!\n",
+                TEXT_GREEN
+            );
+            printf("Press any key to play again, or q to quit: ");
+            fgets(
+                buffer,
+                MAX_STRING_LENGTH,
+                stdin
+            );
+            buffer[MAX_STRING_LENGTH - 1] = '\0';
+            if (buffer[0] == 'q' && buffer[1] == '\n')
+            {
+                break;
+            }
+            clearScreen();
+        }
 
-    // They lost
-    else if (numGuesses == NUM_GUESSES)
-    {
-        printf(
-            "Sorry, the word was %s.\n",
-            answer
-        );
+        // They lost
+        else if (numGuesses == NUM_GUESSES)
+        {
+            printf(
+                "Sorry, the word was %s.\n",
+                answer
+            );
+            printf("Press any key to play again, or q to quit: ");
+            fgets(
+                buffer,
+                MAX_STRING_LENGTH,
+                stdin
+            );
+            buffer[MAX_STRING_LENGTH - 1] = '\0';
+            if (buffer[0] == 'q' && buffer[1] == '\n')
+            {
+                break;
+            }
+            clearScreen();
+        }
     }
+}
+
+// WE WILL FIX THIS I PROMISE
+void clearScreen(void)
+{
+    PCWSTR sequence = L"\x1b[2J";
+    int sequenceLength = 5;
+    DWORD written = 0;
+    HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    BOOL result = WriteConsoleW(
+        hStdOut,
+        sequence,
+        sequenceLength,
+        &written,
+        NULL
+    );
+    assert(result);
+    assert(written == sequenceLength);
+
+    sequence = L"\x1b[3J";
+    written = 0;
+    result = WriteConsoleW(
+        hStdOut,
+        sequence,
+        sequenceLength,
+        &written,
+        NULL
+    );
+    assert(result);
+    assert(written == sequenceLength);
+
+    // Set cursor back to 0,0 coordinates
+    sequence = L"\x1b[0;0H";
+    written = 0;
+    sequenceLength = 7;
+    result = WriteConsoleW(
+        hStdOut,
+        sequence,
+        sequenceLength,
+        &written,
+        NULL
+    );
+    assert(result);
+    assert(written == sequenceLength);
 }
 
 void printTextArray(char* text, int color)
