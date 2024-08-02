@@ -1,7 +1,16 @@
 /*
- * Handle duplicate letters!
+ * HOMEWORK:
  * Look into how to do typedefs
- * Optimization of win/lose code
+ *
+ * NEXT STREAM:
+ * When letter is correct, keep it
+ *   green even if the user moves it
+ * 
+ * FUTURE:
+ * Handle duplicate letters
+ * Implement dictionary
+ * Check if input is a real word
+ * Nicer UI
  */
 
 #include <stdio.h>
@@ -20,9 +29,9 @@
 #define LOWERCASE_OFFSET    32
 #define NUM_GUESSES         6
 
-#define TEXT_NORMAL         0
-#define TEXT_GREEN          32
-#define TEXT_YELLOW         33
+#define COLOR_NORMAL        0
+#define COLOR_GREEN         32
+#define COLOR_YELLOW        33
 
 int validateInput(char* input);
 int checkInputAgainstAnswer(char* input, char* answer);
@@ -30,6 +39,8 @@ void printText(char text, int color);
 void printTextArray(char* text, int color);
 int isLetterInWord(letter, answer);
 void clearScreen(void);
+void printAlphabet(char letter, int color, int print);
+int endGame(int won, char* answer);
 
 int main()
 {
@@ -61,6 +72,7 @@ int main()
     int numGuesses = 0;
     while (1)
     {
+        printAlphabet(0, 0, TRUE);
         printf(
             "Guess a %d-letter word, or press q to quit: ",
             WORD_LENGTH
@@ -89,50 +101,20 @@ int main()
             numGuesses++;
         }
 
-        // They won
-        if (numCorrectLetters == WORD_LENGTH)
+        // An end condition has been met
+        if (numCorrectLetters == WORD_LENGTH || 
+            numGuesses == NUM_GUESSES)
         {
-            printTextArray(
-                "Congratulations, you've won!\n",
-                TEXT_GREEN
-            );
-            printf(
-                "Press any key to play again, or q to quit: "
-            );
-            fgets(
-                buffer,
-                MAX_STRING_LENGTH,
-                stdin
-            );
-            buffer[MAX_STRING_LENGTH - 1] = '\0';
-            if (buffer[0] == 'q' && buffer[1] == '\n')
-            {
-                break;
-            }
-            clearScreen();
-        }
-
-        // They lost
-        else if (numGuesses == NUM_GUESSES)
-        {
-            printf(
-                "Sorry, the word was %s.\n",
+            int won = (numCorrectLetters == WORD_LENGTH);
+            if (endGame(
+                won, 
                 answer
-            );
-            printf(
-                "Press any key to play again, or q to quit: "
-            );
-            fgets(
-                buffer,
-                MAX_STRING_LENGTH,
-                stdin
-            );
-            buffer[MAX_STRING_LENGTH - 1] = '\0';
-            if (buffer[0] == 'q' && buffer[1] == '\n')
+            ))
             {
                 break;
             }
-            clearScreen();
+            numCorrectLetters = 0;
+            numGuesses = 0;
         }
     }
 
@@ -141,6 +123,89 @@ int main()
         originalConsoleMode
     );
     assert(result);
+}
+
+int endGame(int won, char* answer)
+{
+    // Print game end message
+    if (won)
+    {
+        printTextArray(
+            "Congratulations, you've won!\n",
+            COLOR_GREEN
+        );
+    }
+    else
+    {
+        printf(
+            "Sorry, the word was %s.\n",
+            answer
+        );
+    }
+
+    // Ask the user if they would like to play again
+    char buffer[MAX_STRING_LENGTH] = { 0 };
+    printf(
+        "Press any key to play again, or q to quit: "
+    );
+    fgets(
+        buffer,
+        MAX_STRING_LENGTH,
+        stdin
+    );
+    buffer[MAX_STRING_LENGTH - 1] = '\0';
+    if (buffer[0] == 'q' && buffer[1] == '\n')
+    {
+        return TRUE;
+    }
+
+    // If they want to continue, reset the game
+    for (char letter = 'a';
+         letter <= 'z';
+         letter++)
+    {
+        printAlphabet(letter, COLOR_NORMAL, FALSE);
+    }
+    clearScreen();
+    return FALSE;
+}
+
+// This is probably stupid
+// IF they pass NULL as the letter parameter, skip updates
+void printAlphabet(char letter, int color, int print)
+{
+    static char alphabet[26] = { 0 };
+    static int colors[26] = { COLOR_NORMAL };
+
+    // Initialize alphabet if necessary
+    if (alphabet[0] == 0)
+    {
+        for (char letter = 'a';
+             letter <= 'z';
+             letter++)
+        {
+            alphabet[letter - 'a'] = letter;
+        }
+    }
+
+    // Update letter color if desired
+    if (letter >= 'a' &&
+        letter <= 'z')
+    {
+        colors[letter - 'a'] = color;
+    }
+
+    if (print)
+    {
+        for (int index = 0;
+             index < 26;
+             index++)
+        {
+            printText(alphabet[index], colors[index]);
+            printf(" ");
+        }
+        printf("\n");
+    }
 }
 
 void clearScreen(void)
@@ -180,7 +245,7 @@ void printTextArray(char* text, int color)
     );
     printf(
         "\x1b[%dm", 
-        TEXT_NORMAL
+        COLOR_NORMAL
     );
 }
 
@@ -193,14 +258,14 @@ void printText(char text, int color)
     );
     printf(
         "\x1b[%dm", 
-        TEXT_NORMAL
+        COLOR_NORMAL
     );
 }
 
 int checkInputAgainstAnswer(char* input, char* answer)
 {
     int correctLetters = 0;
-    int colors[WORD_LENGTH] = { TEXT_NORMAL };
+    int colors[WORD_LENGTH] = { COLOR_NORMAL };
 
     // Iterate over the input
     for (int index = 0;
@@ -212,7 +277,12 @@ int checkInputAgainstAnswer(char* input, char* answer)
         // Is letter in the right spot?
         if (letter == answer[index])
         {
-            colors[index] = TEXT_GREEN;
+            printAlphabet(
+                letter, 
+                COLOR_GREEN,
+                FALSE
+            );
+            colors[index] = COLOR_GREEN;
             correctLetters++;
         }
 
@@ -222,7 +292,12 @@ int checkInputAgainstAnswer(char* input, char* answer)
             answer
         ))
         {
-            colors[index] = TEXT_YELLOW;
+            printAlphabet(
+                letter,
+                COLOR_YELLOW,
+                FALSE
+            );
+            colors[index] = COLOR_YELLOW;
         }
     }
 
