@@ -1,8 +1,7 @@
 /*
  * Handle duplicate letters!
- * Allow user to replay game if they so wish at 
- *      the end of the loop
- * Store original console mode, and set that when we exit
+ * Look into how to do typedefs
+ * Optimization of win/lose code
  */
 
 #include <stdio.h>
@@ -38,10 +37,17 @@ int main()
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     assert(hOut != INVALID_HANDLE_VALUE);
     DWORD consoleMode = 0;
-    BOOL result = GetConsoleMode(hOut, &consoleMode);
+    BOOL result = GetConsoleMode(
+        hOut,
+        &consoleMode
+    );
     assert(result);
+    DWORD originalConsoleMode = consoleMode;
     consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    result = SetConsoleMode(hOut, consoleMode);
+    result = SetConsoleMode(
+        hOut, 
+        consoleMode
+    );
     assert(result);
 
     //srand((int) time(0));
@@ -90,7 +96,9 @@ int main()
                 "Congratulations, you've won!\n",
                 TEXT_GREEN
             );
-            printf("Press any key to play again, or q to quit: ");
+            printf(
+                "Press any key to play again, or q to quit: "
+            );
             fgets(
                 buffer,
                 MAX_STRING_LENGTH,
@@ -111,7 +119,9 @@ int main()
                 "Sorry, the word was %s.\n",
                 answer
             );
-            printf("Press any key to play again, or q to quit: ");
+            printf(
+                "Press any key to play again, or q to quit: "
+            );
             fgets(
                 buffer,
                 MAX_STRING_LENGTH,
@@ -125,62 +135,66 @@ int main()
             clearScreen();
         }
     }
+
+    result = SetConsoleMode(
+        hOut, 
+        originalConsoleMode
+    );
+    assert(result);
 }
 
-// WE WILL FIX THIS I PROMISE
 void clearScreen(void)
 {
-    PCWSTR sequence = L"\x1b[2J";
-    int sequenceLength = 5;
-    DWORD written = 0;
-    HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    BOOL result = WriteConsoleW(
-        hStdOut,
-        sequence,
-        sequenceLength,
-        &written,
-        NULL
-    );
-    assert(result);
-    assert(written == sequenceLength);
+    wchar_t sequences[3][7] = {
+        L"\x1b[2J",
+        L"\x1b[3J",
+        L"\x1b[0;0H"
+    };
 
-    sequence = L"\x1b[3J";
-    written = 0;
-    result = WriteConsoleW(
-        hStdOut,
-        sequence,
-        sequenceLength,
-        &written,
-        NULL
-    );
-    assert(result);
-    assert(written == sequenceLength);
-
-    // Set cursor back to 0,0 coordinates
-    sequence = L"\x1b[0;0H";
-    written = 0;
-    sequenceLength = 7;
-    result = WriteConsoleW(
-        hStdOut,
-        sequence,
-        sequenceLength,
-        &written,
-        NULL
-    );
-    assert(result);
-    assert(written == sequenceLength);
+    for (int index = 0;
+         index < 3;
+         index++)
+    {
+        wchar_t* sequence = sequences[index];
+        DWORD sequenceLength = (DWORD) wcslen(sequence);
+        DWORD written = 0;
+        HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        BOOL result = WriteConsoleW(
+            hStdOut,
+            sequence,
+            sequenceLength,
+            &written,
+            NULL
+        );
+        assert(result);
+        assert(written == sequenceLength);
+    }
 }
 
 void printTextArray(char* text, int color)
 {
-    printf("\x1b[%dm%s", color, text);
-    printf("\x1b[%dm", TEXT_NORMAL);
+    printf(
+        "\x1b[%dm%s", 
+        color, 
+        text
+    );
+    printf(
+        "\x1b[%dm", 
+        TEXT_NORMAL
+    );
 }
 
 void printText(char text, int color)
 {
-    printf("\x1b[%dm%c", color, text);
-    printf("\x1b[%dm", TEXT_NORMAL);
+    printf(
+        "\x1b[%dm%c", 
+        color, 
+        text
+    );
+    printf(
+        "\x1b[%dm", 
+        TEXT_NORMAL
+    );
 }
 
 int checkInputAgainstAnswer(char* input, char* answer)
@@ -216,7 +230,10 @@ int checkInputAgainstAnswer(char* input, char* answer)
          index < WORD_LENGTH;
          index++)
     {
-        printText(input[index], colors[index]);
+        printText(
+            input[index], 
+            colors[index]
+        );
     }
     printf("\n");
     return correctLetters;
