@@ -1,17 +1,20 @@
 /*
  * HOMEWORK:
- * Look into how to do typedefs
- *
- * NEXT STREAM:
- * When letter is correct, keep it
- *   green even if the user moves it
+ * - Try to find a worlde clone online that mimics wordle's
+ *      duplicate behavior
+ * - What is this hashmap thing chat won't shut up about ;)
+ * 
+ * NOW:
+ * 
+ * NEXT STREAM: 
  * 
  * FUTURE:
- * Handle duplicate letters
- * Implement dictionary
+ * Implement dictionary <- We can figure this out, somehow, some way
  * Check if input is a real word
  * Nicer UI
  */
+
+#define WIN32_LEAN_AND_MEAN
 
 #include <stdio.h>
 #include <time.h>
@@ -22,6 +25,7 @@
 #define NOT     !
 #define TRUE    1
 #define FALSE   0
+typedef wchar_t wchar;
 
 #define MAX_STRING_LENGTH   500
 #define GAME_MAX_NUMBER     10
@@ -34,13 +38,13 @@
 #define COLOR_YELLOW        33
 
 int validateInput(char* input);
-int checkInputAgainstAnswer(char* input, char* answer);
+int checkInputAgainstAnswer(char* input, const char* answer);
 void printText(char text, int color);
 void printTextArray(char* text, int color);
-int isLetterInWord(letter, answer);
+int isLetterInAnswer(char letter, char* tempAnswer, int* colors);
 void clearScreen(void);
 void printAlphabet(char letter, int color, int print);
-int endGame(int won, char* answer);
+int endGame(int won, const char* answer);
 
 int main()
 {
@@ -64,7 +68,7 @@ int main()
     //srand((int) time(0));
     //int answer = (rand() % GAME_MAX_NUMBER) + 1;
 
-    char* answer = "coder";
+    const char* answer = "banal";
 
     char buffer[MAX_STRING_LENGTH];
 
@@ -125,7 +129,7 @@ int main()
     assert(result);
 }
 
-int endGame(int won, char* answer)
+int endGame(int won, const char* answer)
 {
     // Print game end message
     if (won)
@@ -170,8 +174,7 @@ int endGame(int won, char* answer)
     return FALSE;
 }
 
-// This is probably stupid
-// IF they pass NULL as the letter parameter, skip updates
+// If they pass 0 as the letter parameter, skip updates
 void printAlphabet(char letter, int color, int print)
 {
     static char alphabet[26] = { 0 };
@@ -190,7 +193,8 @@ void printAlphabet(char letter, int color, int print)
 
     // Update letter color if desired
     if (letter >= 'a' &&
-        letter <= 'z')
+        letter <= 'z' &&
+        colors[letter - 'a'] != COLOR_GREEN)
     {
         colors[letter - 'a'] = color;
     }
@@ -210,7 +214,7 @@ void printAlphabet(char letter, int color, int print)
 
 void clearScreen(void)
 {
-    wchar_t sequences[3][7] = {
+    wchar sequences[3][7] = {
         L"\x1b[2J",
         L"\x1b[3J",
         L"\x1b[0;0H"
@@ -220,7 +224,7 @@ void clearScreen(void)
          index < 3;
          index++)
     {
-        wchar_t* sequence = sequences[index];
+        wchar* sequence = sequences[index];
         DWORD sequenceLength = (DWORD) wcslen(sequence);
         DWORD written = 0;
         HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -262,12 +266,12 @@ void printText(char text, int color)
     );
 }
 
-int checkInputAgainstAnswer(char* input, char* answer)
+int checkInputAgainstAnswer(char* input, const char* answer)
 {
     int correctLetters = 0;
     int colors[WORD_LENGTH] = { COLOR_NORMAL };
 
-    // Iterate over the input
+    // Check for exactly correct letters
     for (int index = 0;
          index < WORD_LENGTH;
          index++)
@@ -285,20 +289,48 @@ int checkInputAgainstAnswer(char* input, char* answer)
             colors[index] = COLOR_GREEN;
             correctLetters++;
         }
+    }
 
-        // Is letter in the word at all?
-        else if (isLetterInWord(
-            letter,
-            answer
-        ))
+    // Copy answer into tempAnswer so we can modify it
+    char tempAnswer[WORD_LENGTH + 1];
+    for (int index = 0;
+         index < (WORD_LENGTH + 1);
+         index++)
+    {
+        tempAnswer[index] = answer[index];
+    }
+
+    // Check for correct letters in incorrect spots
+    for (int index = 0;
+         index < WORD_LENGTH;
+         index++)
+    {
+        char letter = input[index];
+        if (colors[index] != COLOR_GREEN)
         {
-            printAlphabet(
+            // Is letter in the word at all?
+            if (isLetterInAnswer(
                 letter,
-                COLOR_YELLOW,
-                FALSE
-            );
-            colors[index] = COLOR_YELLOW;
+                tempAnswer,
+                colors
+            ))
+            {
+                printAlphabet(
+                    letter,
+                    COLOR_YELLOW,
+                    FALSE
+                );
+                colors[index] = COLOR_YELLOW;
+            }
         }
+    }
+
+    // Copy answer into tempAnswer to reset tempAnswer
+    for (int index = 0;
+         index < (WORD_LENGTH + 1);
+         index++)
+    {
+        tempAnswer[index] = answer[index];
     }
 
     for (int index = 0;
@@ -314,19 +346,23 @@ int checkInputAgainstAnswer(char* input, char* answer)
     return correctLetters;
 }
 
-// RESEARCH: Should this be unsigned char?
-int isLetterInWord(
+int isLetterInAnswer(
     char letter,
-    char* word
+    char* tempAnswer,
+    int* colors
 )
 {
     for (int index = 0;
-         word[index] != '\0';
+         tempAnswer[index] != '\0';
          index++)
     {
-        if (letter == word[index])
+        if (colors[index] != COLOR_GREEN)
         {
-            return TRUE;
+            if (letter == tempAnswer[index])
+            {
+                tempAnswer[index] = '_';
+                return TRUE;
+            }
         }
     }
     return FALSE;

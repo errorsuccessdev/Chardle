@@ -1,0 +1,24 @@
+This was an explanation of why I couldn't modify Answer
+
+C supports two types of declaring "string literals".
+ 
+One looks like this: 
+
+READONLY
+const char *answer = "something";
+ 
+Another like this:
+Not readonly!
+char answer[] = "something";
+ 
+The first syntax means "write the bytes of the 
+string to a readonly part of the executable, and save the 
+pointer to those bytes into this variable".
+ 
+The second syntax means "write the bytes of the 
+string *to the stack*, and save the pointer into this variable".
+ 
+Guess which one you need :)
+ 
+Your solution worked, because you first copied 
+bytes from readonly memory to a regular array.
