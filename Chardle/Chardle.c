@@ -7,35 +7,27 @@
  * NOW:
  * 
  * NEXT STREAM: 
+ * Implement dictionary <- We can figure this out, 
+        somehow, some way
  * 
  * FUTURE:
- * Implement dictionary <- We can figure this out, somehow, some way
  * Check if input is a real word
  * Nicer UI
  */
 
 #define WIN32_LEAN_AND_MEAN
 
+#pragma comment( lib, "bcrypt" )
+
+#pragma once
+#include "Chardle.h"
 #include <stdio.h>
-#include <time.h>
-#include <stdlib.h>
 #include <assert.h>
-#include <Windows.h>
+#include <bcrypt.h>
 
-#define NOT     !
-#define TRUE    1
-#define FALSE   0
-typedef wchar_t wchar;
-
-#define MAX_STRING_LENGTH   500
-#define GAME_MAX_NUMBER     10
-#define WORD_LENGTH         5
-#define LOWERCASE_OFFSET    32
-#define NUM_GUESSES         6
-
-#define COLOR_NORMAL        0
-#define COLOR_GREEN         32
-#define COLOR_YELLOW        33
+#define COLOR_NORMAL    0
+#define COLOR_GREEN     32
+#define COLOR_YELLOW    33
 
 int validateInput(char* input);
 int checkInputAgainstAnswer(char* input, const char* answer);
@@ -45,6 +37,8 @@ int isLetterInAnswer(char letter, char* tempAnswer, int* colors);
 void clearScreen(void);
 void printAlphabet(char letter, int color, int print);
 int endGame(int won, const char* answer);
+
+char dictionary[NUM_WORDS][WORD_LENGTH + 1];
 
 int main()
 {
@@ -65,18 +59,32 @@ int main()
     );
     assert(result);
 
-    //srand((int) time(0));
-    //int answer = (rand() % GAME_MAX_NUMBER) + 1;
+    // Get random word
+    // I don't care if this is like driving
+    // a ferrari to Walmart. I'm keeping it.
+    unsigned int randomNumber = 0;
+    NTSTATUS status = BCryptGenRandom(
+        NULL,
+        (unsigned char*) &randomNumber,
+        sizeof(unsigned int),
+        BCRYPT_USE_SYSTEM_PREFERRED_RNG
+    );
+    assert(status == 0);
+    randomNumber %= NUM_WORDS;
 
-    const char* answer = "banal";
+    const char* answer = dictionary[randomNumber];
+    printf("%s\n", answer);
 
     char buffer[MAX_STRING_LENGTH];
-
     int numCorrectLetters = 0;
     int numGuesses = 0;
     while (1)
     {
-        printAlphabet(0, 0, TRUE);
+        printAlphabet(
+            0,
+            0, 
+            TRUE
+        );
         printf(
             "Guess a %d-letter word, or press q to quit: ",
             WORD_LENGTH
@@ -168,7 +176,11 @@ int endGame(int won, const char* answer)
          letter <= 'z';
          letter++)
     {
-        printAlphabet(letter, COLOR_NORMAL, FALSE);
+        printAlphabet(
+            letter, 
+            COLOR_NORMAL, 
+            FALSE
+        );
     }
     clearScreen();
     return FALSE;
@@ -205,7 +217,10 @@ void printAlphabet(char letter, int color, int print)
              index < 26;
              index++)
         {
-            printText(alphabet[index], colors[index]);
+            printText(
+                alphabet[index], 
+                colors[index]
+            );
             printf(" ");
         }
         printf("\n");
@@ -292,7 +307,7 @@ int checkInputAgainstAnswer(char* input, const char* answer)
     }
 
     // Copy answer into tempAnswer so we can modify it
-    char tempAnswer[WORD_LENGTH + 1];
+    char tempAnswer[WORD_LENGTH + 1] = { 0 };
     for (int index = 0;
          index < (WORD_LENGTH + 1);
          index++)
@@ -374,7 +389,8 @@ int validateInput(char* input)
     int length;
     for (length = 0;
          input[length] != '\0';
-         length++);
+         length++)
+    { };
     if (length != 6)
     {
         return FALSE;

@@ -18,5 +18,13 @@
     <ClCompile Include="Chardle.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Dict.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Chardle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
