@@ -3,15 +3,13 @@
  * - Try to find a worlde clone online that mimics wordle's
  *      duplicate behavior
  * - What is this hashmap thing chat won't shut up about ;)
+ * - Cross-reference with other dictionaries to improve completeness
  * 
  * NOW:
  * 
  * NEXT STREAM: 
- * Implement dictionary <- We can figure this out, 
-        somehow, some way
  * 
  * FUTURE:
- * Check if input is a real word
  * Nicer UI
  */
 
@@ -37,7 +35,9 @@ int isLetterInAnswer(char letter, char* tempAnswer, int* colors);
 void clearScreen(void);
 void printAlphabet(char letter, int color, int print);
 int endGame(int won, const char* answer);
+int binarySearch(const char* guess, int start, int end);
 
+// RESEARCH: Is it bad that this is global?
 char dictionary[NUM_WORDS][WORD_LENGTH + 1];
 
 int main()
@@ -60,8 +60,6 @@ int main()
     assert(result);
 
     // Get random word
-    // I don't care if this is like driving
-    // a ferrari to Walmart. I'm keeping it.
     unsigned int randomNumber = 0;
     NTSTATUS status = BCryptGenRandom(
         NULL,
@@ -71,7 +69,6 @@ int main()
     );
     assert(status == 0);
     randomNumber %= NUM_WORDS;
-
     const char* answer = dictionary[randomNumber];
     printf("%s\n", answer);
 
@@ -110,7 +107,7 @@ int main()
                     buffer,
                     answer
                 );
-            numGuesses++;
+           numGuesses++;
         }
 
         // An end condition has been met
@@ -135,6 +132,40 @@ int main()
         originalConsoleMode
     );
     assert(result);
+}
+
+int binarySearch(const char* guess, int start, int end)
+{
+    // word isn't in the array
+    if (start > end)
+    {
+        return -1;
+    }
+    int mid = end + (start - end) / 2;
+    char* midWord = dictionary[mid];
+
+    for (int index = 0;
+         index < WORD_LENGTH;
+         index++)
+    {
+        if (guess[index] < midWord[index])
+        {
+            return binarySearch(
+                guess,
+                start,
+                mid - 1
+            );
+        }
+        else if (guess[index] > midWord[index])
+        {
+            return binarySearch(
+                guess,
+                mid + 1,
+                end
+            );
+        }
+    }
+    return mid;
 }
 
 int endGame(int won, const char* answer)
@@ -416,6 +447,18 @@ int validateInput(char* input)
         {
             return FALSE;
         }
+    }
+
+    // Make sure it is in our dictionary
+    int isInDictionary = binarySearch(
+        input, 
+        0, 
+        (NUM_WORDS - 1)
+    );
+    if (isInDictionary == -1)
+    {
+        printf("%s not in dictionary!\n", input);
+        return FALSE;
     }
     return TRUE;
 }

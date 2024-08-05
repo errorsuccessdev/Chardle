@@ -956,6 +956,7 @@ char dictionary[NUM_WORDS][WORD_LENGTH + 1] = {
     "faked",
     "faker",
     "fakir",
+    "falls",
     "false",
     "famed",
     "fancy",
