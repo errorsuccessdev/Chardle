@@ -18,7 +18,10 @@
     <ClCompile Include="Chardle.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Dict.c">
+    <ClCompile Include="DictValid.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DictAnswers.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

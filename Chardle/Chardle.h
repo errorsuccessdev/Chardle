@@ -11,4 +11,5 @@ typedef wchar_t wchar;
 #define WORD_LENGTH         5
 #define LOWERCASE_OFFSET    32
 #define NUM_GUESSES         6
-#define NUM_WORDS           3159
+#define NUM_VALID_WORDS     12972
+#define NUM_ANSWERS         2315     

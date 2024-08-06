@@ -1,0 +1,10 @@
+ninja
+devil
+trace
+react
+xxxxx
+xxxxx
+
+a b c d...
+
+Guess a word or press q to quit: react

@@ -130,7 +130,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Chardle.c" />
-    <ClCompile Include="Dict.c" />
+    <ClCompile Include="DictAnswers.c" />
+    <ClCompile Include="DictValid.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Chardle.h" />
