@@ -5,14 +5,13 @@
  * - What is this hashmap thing chat won't shut up about ;)
  * 
  * NOW:
- * Remember previous answers
  * 
  * NEXT STREAM: 
+ * Error handling when user enters > MAX_STRING_LENGTH characters
+ * Maybe use this? https://en.cppreference.com/w/c/io/getchar 
  * 
  * FUTURE:
  * Nicer UI
- * Error handling when user enters > MAX_STRING_LENGTH characters
- * Maybe use this? https://en.cppreference.com/w/c/io/getchar 
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -37,7 +36,7 @@ void printString(char* text, int color);
 int isLetterInAnswer(char letter, char* tempAnswer, int* colors);
 void clearScreen(void);
 void printAlphabet(char letter, int color, int print);
-int endGame(int won, const char* answer);
+int endGame(int won, char* answer);
 int binarySearch(const char* guess, int start, int end);
 void printBoard(const char* word, int* colors);
 char* getRandomAnswer(void);
@@ -45,6 +44,8 @@ char* getRandomAnswer(void);
 // RESEARCH: Is it bad that tthese are global?
 char dictValid[NUM_VALID_WORDS][WORD_LENGTH + 1];
 char dictAnswers[NUM_ANSWERS][WORD_LENGTH + 1];
+
+int globalNumAnswers = NUM_ANSWERS;
 
 int main()
 {
@@ -71,14 +72,6 @@ int main()
     int gameStarted = FALSE;
     char* answer = 0;
 
-
-    // This wouldn't work very well when we got towards the end
-    // It would be nice if we could almost "shrink" the array
-    //  of possible answers as we went along.
-    static int previousAnswer[NUM_ANSWERS] = 0;
-    int numRounds = 0; 
-
-
     while (1)
     {
         if (NOT gameStarted)
@@ -101,6 +94,12 @@ int main()
             stdin
         );
         buffer[MAX_STRING_LENGTH - 1] = '\0';
+
+        // How do we open stdin with fopen? Or can we?
+        //FILE* stdinWritable = fopen(stdin, "w");
+        //assert(stdinWritable);
+        //int result = fflush(stdin);
+        //assert(result == 0);
 
         // If the user has pressed 'q', quit immediately
         if (buffer[0] == 'q' && buffer[1] == '\n')
@@ -155,7 +154,7 @@ char* getRandomAnswer(void)
         BCRYPT_USE_SYSTEM_PREFERRED_RNG
     );
     assert(status == 0);
-    randomNumber %= NUM_ANSWERS;
+    randomNumber %= globalNumAnswers;
     char* answer = dictAnswers[randomNumber];
     printf("%s\n", answer);
     return answer;
@@ -195,7 +194,7 @@ int binarySearch(const char* guess, int start, int end)
     return mid;
 }
 
-int endGame(int won, const char* answer)
+int endGame(int won, char* answer)
 {
     // Print game end message
     if (won)
@@ -211,6 +210,18 @@ int endGame(int won, const char* answer)
             "Sorry, the word was %s.\n",
             answer
         );
+    }
+
+    // If they have exhausted the entire answer dictionary,
+    //      quit out
+    if (globalNumAnswers == 1)
+    {
+        printString(
+            "\nYou have guessed all of the words in the game! "
+            "Thanks for playing!\n",
+            COLOR_GREEN
+        );
+        return TRUE;
     }
 
     // Ask the user if they would like to play again
@@ -240,6 +251,25 @@ int endGame(int won, const char* answer)
             FALSE
         );
     }
+
+    // Move remaining words up in the array
+    int numCharsPerElement = WORD_LENGTH + 1;
+    int answerIndex = (int)
+        ((answer - dictAnswers[0]) /
+        numCharsPerElement);
+    int numAnswersLeft = globalNumAnswers - answerIndex;
+    int numCharsLeft = 
+        numAnswersLeft * numCharsPerElement;
+
+    // Asaf you are a legend!
+    void* result = memmove(
+        answer,
+        answer + (WORD_LENGTH + 1),
+        numCharsLeft
+    );
+    assert(result);
+    globalNumAnswers--;
+
     clearScreen();
     return FALSE;
 }

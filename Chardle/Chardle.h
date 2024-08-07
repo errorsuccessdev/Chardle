@@ -6,7 +6,7 @@
 #define FALSE   0
 typedef wchar_t wchar;
 
-#define MAX_STRING_LENGTH   500
+#define MAX_STRING_LENGTH   10
 #define GAME_MAX_NUMBER     10
 #define WORD_LENGTH         5
 #define LOWERCASE_OFFSET    32
