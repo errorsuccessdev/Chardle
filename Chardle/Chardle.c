@@ -3,15 +3,13 @@
  * - Try to find a worlde clone online that mimics wordle's
  *      duplicate behavior
  * - What is this hashmap thing chat won't shut up about ;)
- * 
+ *
  * NOW:
- * 
- * NEXT STREAM: 
- * Error handling when user enters > MAX_STRING_LENGTH characters
- * Maybe use this? https://en.cppreference.com/w/c/io/getchar 
- * 
- * FUTURE:
  * Nicer UI
+ *
+ * NEXT STREAM:
+ *
+ * FUTURE:
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -23,6 +21,11 @@
 #include <stdio.h>
 #include <assert.h>
 #include <bcrypt.h>
+#include <conio.h>
+
+#define WORD_LENGTH 5
+#define ESCAPE      27
+#define NOT         !
 
 #define COLOR_NORMAL    0
 #define COLOR_GREEN     32
@@ -40,12 +43,15 @@ int endGame(int won, char* answer);
 int binarySearch(const char* guess, int start, int end);
 void printBoard(const char* word, int* colors);
 char* getRandomAnswer(void);
+int getInput(char* buffer);
 
-// RESEARCH: Is it bad that tthese are global?
+// RESEARCH: Is it bad that these are global?
 char dictValid[NUM_VALID_WORDS][WORD_LENGTH + 1];
 char dictAnswers[NUM_ANSWERS][WORD_LENGTH + 1];
 
 int globalNumAnswers = NUM_ANSWERS;
+
+int globalNumGuesses = 0;
 
 int main()
 {
@@ -61,14 +67,12 @@ int main()
     DWORD originalConsoleMode = consoleMode;
     consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     result = SetConsoleMode(
-        hOut, 
+        hOut,
         consoleMode
     );
     assert(result);
 
-    char buffer[MAX_STRING_LENGTH];
     int numCorrectLetters = 0;
-    int numGuesses = 0;
     int gameStarted = FALSE;
     char* answer = 0;
 
@@ -77,32 +81,27 @@ int main()
         if (NOT gameStarted)
         {
             answer = getRandomAnswer();
+            printf("\n\n\n\n\n\n\n\n\n\n");
             gameStarted = TRUE;
+
+            printf(
+                "Guess a %d-letter word, or press ESC to quit: ",
+                WORD_LENGTH
+            );
+
         }
         printAlphabet(
             0,
-            0, 
+            0,
             TRUE
         );
-        printf(
-            "Guess a %d-letter word, or press q to quit: ",
-            WORD_LENGTH
-        );
-        fgets(
-            buffer,
-            MAX_STRING_LENGTH,
-            stdin
-        );
-        buffer[MAX_STRING_LENGTH - 1] = '\0';
 
-        // How do we open stdin with fopen? Or can we?
-        //FILE* stdinWritable = fopen(stdin, "w");
-        //assert(stdinWritable);
-        //int result = fflush(stdin);
-        //assert(result == 0);
+        char buffer[WORD_LENGTH + 1] = { 0 };
+        int shouldContinue = getInput(buffer);
 
-        // If the user has pressed 'q', quit immediately
-        if (buffer[0] == 'q' && buffer[1] == '\n')
+        // If the user has pressed escape, 
+        //  quit out immediately
+        if (NOT shouldContinue)
         {
             break;
         }
@@ -115,32 +114,72 @@ int main()
                     buffer,
                     answer
                 );
-           numGuesses++;
         }
 
-        // An end condition has been met
-        if (numCorrectLetters == WORD_LENGTH || 
-            numGuesses == NUM_GUESSES)
+        // Todo: Fix this
+        printf("\b\b\b\b\b     \b\b\b\b\b");
+
+        // If an end condition has been met
+        if (numCorrectLetters == WORD_LENGTH ||
+            globalNumGuesses == NUM_GUESSES)
         {
             int won = (numCorrectLetters == WORD_LENGTH);
-            if (endGame(
-                won, 
+            int shouldEnd = endGame(
+                won,
                 answer
-            ))
+            );
+            if (shouldEnd)
             {
                 break;
             }
             numCorrectLetters = 0;
-            numGuesses = 0;
+            globalNumGuesses = 0;
             gameStarted = FALSE;
         }
     }
 
     result = SetConsoleMode(
-        hOut, 
+        hOut,
         originalConsoleMode
     );
     assert(result);
+}
+
+int getInput(char* buffer)
+{
+    int numEnteredChars = 0;
+    while (1)
+    {
+        char input = _getch();
+        if (input == '\b')
+        {
+            if (numEnteredChars > 0)
+            {
+                printf("\b \b");
+                numEnteredChars--;
+            }
+        }
+        else if (input >= 'a' &&
+                 input <= 'z' &&
+                 numEnteredChars < WORD_LENGTH)
+        {
+            printf(
+                "%c",
+                input
+            );
+            buffer[numEnteredChars] = input;
+            numEnteredChars++;
+        }
+        else if (input == ESCAPE)
+        {
+            return FALSE;
+        }
+        else if (input == '\r' &&
+                 numEnteredChars == WORD_LENGTH)
+        {
+            return TRUE;
+        }
+    }
 }
 
 char* getRandomAnswer(void)
@@ -156,7 +195,7 @@ char* getRandomAnswer(void)
     assert(status == 0);
     randomNumber %= globalNumAnswers;
     char* answer = dictAnswers[randomNumber];
-    printf("%s\n", answer);
+    OutputDebugStringA(answer);
     return answer;
 }
 
@@ -197,6 +236,8 @@ int binarySearch(const char* guess, int start, int end)
 int endGame(int won, char* answer)
 {
     // Print game end message
+    printf("\x1b[1K");
+    printf("\x1b[0G");
     if (won)
     {
         printString(
@@ -227,15 +268,10 @@ int endGame(int won, char* answer)
     // Ask the user if they would like to play again
     char buffer[MAX_STRING_LENGTH] = { 0 };
     printf(
-        "Press any key to play again, or q to quit: "
+        "Press any key to play again, or ESC to quit..."
     );
-    fgets(
-        buffer,
-        MAX_STRING_LENGTH,
-        stdin
-    );
-    buffer[MAX_STRING_LENGTH - 1] = '\0';
-    if (buffer[0] == 'q' && buffer[1] == '\n')
+    char input = _getch();
+    if (input == ESCAPE)
     {
         return TRUE;
     }
@@ -246,8 +282,8 @@ int endGame(int won, char* answer)
          letter++)
     {
         printAlphabet(
-            letter, 
-            COLOR_NORMAL, 
+            letter,
+            COLOR_NORMAL,
             FALSE
         );
     }
@@ -256,19 +292,38 @@ int endGame(int won, char* answer)
     int numCharsPerElement = WORD_LENGTH + 1;
     int answerIndex = (int)
         ((answer - dictAnswers[0]) /
-        numCharsPerElement);
+         numCharsPerElement);
     int numAnswersLeft = globalNumAnswers - answerIndex;
-    int numCharsLeft = 
+    int numCharsLeft =
         numAnswersLeft * numCharsPerElement;
 
-    // Asaf you are a legend!
-    void* result = memmove(
-        answer,
-        answer + (WORD_LENGTH + 1),
-        numCharsLeft
-    );
-    assert(result);
+    // Remove the used answer from the array of answers
+    for (int index = answerIndex + 1;
+         index < globalNumAnswers;
+         index++)
+    {
+        for (int letter = 0;
+             letter < WORD_LENGTH;
+             letter++)
+        {
+            dictAnswers[index - 1][letter] =
+                dictAnswers[index][letter];
+        }
+    }
     globalNumAnswers--;
+
+    // For debugging purposes, clear the rest of the array
+    for (int index = globalNumAnswers;
+         index < NUM_ANSWERS;
+         index++)
+    {
+        for (int letter = 0;
+             letter < WORD_LENGTH;
+             letter++)
+        {
+            dictAnswers[index][letter] = 0;
+        }
+    }
 
     clearScreen();
     return FALSE;
@@ -300,17 +355,32 @@ void printAlphabet(char letter, int color, int print)
 
     if (print)
     {
+        // Save cursor position
+        printf(
+            "\x1b%d",
+            7
+        );
+
+        // Move cursor up one line
+        printf("\x1b[3F");
+
+        // Print array
         for (int index = 0;
              index < 26;
              index++)
         {
             printText(
-                alphabet[index], 
+                alphabet[index],
                 colors[index]
             );
             printf(" ");
         }
-        printf("\n");
+
+        // Restore cursor position
+        printf(
+            "\x1b%d",
+            8
+        );
     }
 }
 
@@ -362,7 +432,7 @@ void printString(char* text, int color)
     }
 
     printf(
-        "\x1b[%dm", 
+        "\x1b[%dm",
         COLOR_NORMAL
     );
 }
@@ -409,7 +479,7 @@ int checkInputAgainstAnswer(char* input, const char* answer)
         if (letter == answer[index])
         {
             printAlphabet(
-                letter, 
+                letter,
                 COLOR_GREEN,
                 FALSE
             );
@@ -480,7 +550,29 @@ int checkInputAgainstAnswer(char* input, const char* answer)
         }
     }
 
+
+    globalNumGuesses++;
+
+    // Save cursor position
+    printf(
+        "\x1b%d",
+        7
+    );
+
+    // Move cursor to guess position, print board
+    printf(
+        "\x1b[%d;%dH",
+        globalNumGuesses,
+        0
+    );
+
     printBoard(input, colors);
+
+    // Restore cursor position
+    printf(
+        "\x1b%d",
+        8
+    );
 
     return correctLetters;
 }
@@ -496,7 +588,6 @@ void printBoard(const char* word, int* colors)
             colors[index]
         );
     }
-    printf("\n");
 }
 
 int isLetterInAnswer(
@@ -528,8 +619,9 @@ int validateInput(char* input)
     for (length = 0;
          input[length] != '\0';
          length++)
-    { };
-    if (length != 6)
+    {
+    };
+    if (length != 5)
     {
         return FALSE;
     }
@@ -558,14 +650,52 @@ int validateInput(char* input)
 
     // Make sure it is in our dictionary
     int isInDictionary = binarySearch(
-        input, 
-        0, 
+        input,
+        0,
         (NUM_VALID_WORDS - 1)
     );
     if (isInDictionary == -1)
-    {
-        printf("%s not in dictionary!\n", input);
+    { 
+        // Save cursor position
+        printf(
+            "\x1b%d",
+            7
+        );
+
+        // Move cursor up one line
+        printf("\x1b[1F");
+
+        printf("%s not in dictionary!", input);
+
+        // Restore cursor position
+        printf(
+            "\x1b%d",
+            8
+        );
+
         return FALSE;
     }
-    return TRUE;
+
+    else
+    {
+        // Save cursor position
+        printf(
+            "\x1b%d",
+            7
+        );
+
+        // Move cursor up one line
+        printf("\x1b[1F");
+
+        // Delete everything on that line
+        printf("\x1b[2K");
+
+        // Restore cursor position
+        printf(
+            "\x1b%d",
+            8
+        );
+
+        return TRUE;
+    }
 }

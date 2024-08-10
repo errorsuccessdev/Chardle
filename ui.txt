@@ -5,6 +5,8 @@ react
 xxxxx
 xxxxx
 
-a b c d...
+q w e r t y u i o p
+ a s d f g h j k l
+  z x c v b n m 
 
 Guess a word or press q to quit: react
