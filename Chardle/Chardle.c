@@ -6,9 +6,7 @@
  * - What is an enum
  *
  * NOW:
- * Nicer UI
- * #define's for virtual terminal sequences
- * Consolidate color printing functions (pass number of chars?)
+ * Nicer alphabet printout
  *
  * NEXT STREAM:
  *
@@ -27,44 +25,45 @@
 #include <bcrypt.h>
 #include <conio.h>
 
-#define NOT     !
-#define TRUE    1
-#define FALSE   0
+#define NOT         !
+#define TRUE        1
+#define FALSE       0
+#define ESCAPE_KEY  27
+#define NUM_GUESSES 6
 
-#define ESCAPE_KEY      27
-#define NUM_GUESSES     6
 
-#define COLOR_NORMAL    0
-#define COLOR_GREEN     32
-#define COLOR_YELLOW    33
-#define COLOR_GRAY      1000
+typedef enum enumColor
+{
+    DEFAULT = 0, GREEN = 32, YELLOW = 33, GRAY
+} Color;
+
+typedef enum enumAction
+{
+    MOVE_UP, MOVE_FROM_TOP,
+    ERASE, CLEAR_SCREEN, CLEAR_LINE,
+    SAVE_POS, RESTORE_POS
+} Action;
+
+// TODO: To use or not to use?
+typedef struct structLetter
+{
+    char character;
+    Color color;
+} Letter;
 
 int validateInput(char* input);
-int checkInputAgainstAnswer(
-    char* input,
-    const char* answer,
-    int* numGuesses
-);
-void printCharInColor(char text, int color);
-void printStringInColor(char* text, int color);
-int isLetterInAnswer(
-    char letter, 
-    char* tempAnswer, 
-    int* colors
-);
-void clearScreen(void);
 void printAlphabet(char letter, int color, int print);
 int endGame(int won, char* answer, int numAnswers);
 int binarySearch(const char* guess, int start, int end);
 char* getRandomAnswer(int numAnswers);
 int getInput(char* buffer);
-
-typedef enum
-{
-    MOVE_UP, ERASE, CLEAR_SCREEN, CLEAR_LINE, SAVE, RESTORE,
-    MOVE_FROM_TOP
-} Action;
 void doCursorAction(Action action, int numTimes);
+void printCharsInColor(char* word, Color* colors,
+                       int useSingleColor);
+int checkAgainstAnswer(char* input, const char* answer,
+                       int* numGuesses);
+int isLetterInAnswer(char letter, char* tempAnswer,
+                     Color* colors);
 
 // RESEARCH: Is it bad that these are global?
 char dictValid[NUM_VALID_WORDS][WORD_LENGTH + 1];
@@ -124,23 +123,25 @@ int main()
         );
 
         char buffer[WORD_LENGTH + 1] = { 0 };
-        int shouldContinue = getInput(buffer);
+        int shouldEnd = getInput(buffer);
 
-        // If the user has pressed escape, 
-        //  quit out immediately
-        if (NOT shouldContinue)
+        // If the user has pressed escape, quit
+        if (shouldEnd)
         {
             break;
         }
 
         // Erase user's current guess
-        doCursorAction(ERASE, WORD_LENGTH);
+        doCursorAction(
+            ERASE, 
+            WORD_LENGTH
+        );
 
         int inputIsValid = validateInput(buffer);
         if (inputIsValid)
         {
             numCorrectLetters =
-                checkInputAgainstAnswer(
+                checkAgainstAnswer(
                     buffer,
                     answer,
                     &numGuesses
@@ -187,7 +188,10 @@ int getInput(char* buffer)
         {
             if (numEnteredChars > 0)
             {
-                doCursorAction(ERASE, 1);
+                doCursorAction(
+                    ERASE, 
+                    1
+                );
                 numEnteredChars--;
             }
         }
@@ -205,13 +209,13 @@ int getInput(char* buffer)
         else if (input == ESCAPE_KEY)
         {
             buffer[WORD_LENGTH] = 0;
-            return FALSE;
+            return TRUE;
         }
         else if (input == '\r' &&
                  numEnteredChars == WORD_LENGTH)
         {
             buffer[WORD_LENGTH] = 0;
-            return TRUE;
+            return FALSE;
         }
     }
 }
@@ -233,7 +237,7 @@ void doCursorAction(Action action, int numTimes)
             printf(
                 "\x1b[%d;%dH",
                 numTimes,
-                0
+                0 // Top row
             );
             break;
         }
@@ -256,19 +260,19 @@ void doCursorAction(Action action, int numTimes)
             printf("\x1b[2J\x1b[3J\x1b[0;0H");
             break;
         }
-        case SAVE:
+        case SAVE_POS:
         {
             printf(
                 "\x1b%d",
-                7
+                7 // Save cursor position
             );
             break;
         }
-        case RESTORE:
+        case RESTORE_POS:
         {
             printf(
                 "\x1b%d",
-                8
+                8 // Restore cursor position
             );
             break;
         }
@@ -294,11 +298,12 @@ char* getRandomAnswer(int numAnswers)
 
 int binarySearch(const char* guess, int start, int end)
 {
-    // word isn't in the array
+    // The word isn't in the array
     if (start > end)
     {
         return -1;
     }
+
     int mid = end + (start - end) / 2;
     char* midWord = dictValid[mid];
 
@@ -329,16 +334,22 @@ int binarySearch(const char* guess, int start, int end)
 int endGame(int won, char* answer, int numAnswers)
 {
     // Print game end message
-    doCursorAction(MOVE_UP, 1);
+    doCursorAction(
+        MOVE_UP, 
+        1
+    );
     if (won)
     {
-        printStringInColor(
+        Color green = GREEN;
+        printCharsInColor(
             "Congratulations, you've won!\n",
-            COLOR_GREEN
+            &green,
+            TRUE
         );
     }
     else
     {
+        // TODO: Add color for this
         printf(
             "Sorry, the word was %s.\n",
             answer
@@ -349,10 +360,12 @@ int endGame(int won, char* answer, int numAnswers)
     //      quit out
     if (numAnswers == 1)
     {
-        printStringInColor(
+        Color green = GREEN;
+        printCharsInColor(
             "\nYou have guessed all of the words in the game! "
             "Thanks for playing!\n",
-            COLOR_GREEN
+            &green,
+            TRUE
         );
         return TRUE;
     }
@@ -374,7 +387,7 @@ int endGame(int won, char* answer, int numAnswers)
     {
         printAlphabet(
             letter,
-            COLOR_NORMAL,
+            DEFAULT,
             FALSE
         );
     }
@@ -415,7 +428,10 @@ int endGame(int won, char* answer, int numAnswers)
             dictAnswers[index][letter] = 0;
         }
     }
-    doCursorAction(CLEAR_SCREEN, 0);
+    doCursorAction(
+        CLEAR_SCREEN,
+        0
+    );
     return FALSE;
 }
 
@@ -423,7 +439,7 @@ int endGame(int won, char* answer, int numAnswers)
 void printAlphabet(char letter, int color, int print)
 {
     static char alphabet[26] = { 0 };
-    static int colors[26] = { 0 };
+    static Color colors[26] = { 0 };
 
     // Initialize alphabet if necessary
     if (alphabet[0] == 0)
@@ -432,7 +448,8 @@ void printAlphabet(char letter, int color, int print)
              letter <= 'z';
              letter++)
         {
-            alphabet[letter - 'a'] = letter;
+            int index = letter - 'a';
+            alphabet[index] = letter;
         }
     }
 
@@ -445,88 +462,90 @@ void printAlphabet(char letter, int color, int print)
 
     if (print)
     {
-        // Save cursor position
-        doCursorAction(SAVE, 0);
+        doCursorAction(
+            SAVE_POS,
+            0
+        );
+        doCursorAction(
+            MOVE_UP,
+            3
+        );
+        printCharsInColor(
+            alphabet,
+            colors,
+            FALSE
+        );
+        printf(" ");
+        doCursorAction(
+            RESTORE_POS,
+            0
+        );
+    }
+}
 
-        // Move cursor up n lines
-        doCursorAction(MOVE_UP, 3);
-
-        // Print array
+void printCharsInColor(
+    char* word,
+    Color* colors,
+    int useSingleColor
+)
+{
+    if (useSingleColor)
+    {
+        if (*colors == GRAY)
+        {
+            printf(
+                "\x1b[38;2;103;103;103m%s",
+                word
+            );
+        }
+        else
+        {
+            printf(
+                "\x1b[%dm%s",
+                *colors,
+                word
+            );
+        }
+    }
+    else
+    {
         for (int index = 0;
-             index < 26;
+             word[index] != '\0';
              index++)
         {
-            printCharInColor(
-                alphabet[index],
-                colors[index]
-            );
-            printf(" ");
+            Color color = colors[index];
+            if (color == GRAY)
+            {
+                printf(
+                    "\x1b[38;2;103;103;103m%c",
+                    word[index]
+                );
+            }
+            else
+            {
+                printf(
+                    "\x1b[%dm%c",
+                    color,
+                    word[index]
+                );
+            }
         }
-
-        // Restore cursor position
-        doCursorAction(RESTORE, 0);
-
-    }
-}
-
-void printStringInColor(char* text, int color)
-{
-    // We have to use custom RGB to get grey
-    if (color == COLOR_GRAY)
-    {
-        printf("\x1b[38;2;103;103;103m%s",
-               text);
-    }
-
-    // Otherwise, we can use the system color codes
-    else
-    {
-        printf(
-            "\x1b[%dm%s",
-            color,
-            text
-        );
     }
 
     printf(
         "\x1b[%dm",
-        COLOR_NORMAL
-    );
-}
-
-void printCharInColor(char text, int color)
-{
-    // We have to use custom RGB to get grey
-    if (color == COLOR_GRAY)
-    {
-        printf("\x1b[38;2;103;103;103m%c",
-               text);
-    }
-
-    // Otherwise, we can use the system color codes
-    else
-    {
-        printf(
-            "\x1b[%dm%c",
-            color,
-            text
-        );
-    }
-
-    printf(
-        "\x1b[%dm",
-        COLOR_NORMAL
+        DEFAULT
     );
 }
 
 // TODO: This could certainly be refactored into something nicer
-int checkInputAgainstAnswer(
-    char* input, 
+int checkAgainstAnswer(
+    char* input,
     const char* answer,
     int* numGuesses)
 {
     int numCorrectLetters = 0;
-    int colors[WORD_LENGTH] = { 0 };
+    Color colors[WORD_LENGTH] = { 0 };
 
     // Check for exactly correct letters
     for (int index = 0;
@@ -540,10 +559,10 @@ int checkInputAgainstAnswer(
         {
             printAlphabet(
                 letter,
-                COLOR_GREEN,
+                GREEN,
                 FALSE
             );
-            colors[index] = COLOR_GREEN;
+            colors[index] = GREEN;
             numCorrectLetters++;
         }
     }
@@ -563,7 +582,7 @@ int checkInputAgainstAnswer(
          index++)
     {
         char letter = input[index];
-        if (colors[index] != COLOR_GREEN)
+        if (colors[index] != GREEN)
         {
             // Is letter in the word at all?
             if (isLetterInAnswer(
@@ -574,10 +593,10 @@ int checkInputAgainstAnswer(
             {
                 printAlphabet(
                     letter,
-                    COLOR_YELLOW,
+                    YELLOW,
                     FALSE
                 );
-                colors[index] = COLOR_YELLOW;
+                colors[index] = YELLOW;
             }
         }
     }
@@ -598,13 +617,13 @@ int checkInputAgainstAnswer(
         int color = colors[index];
         char letter = input[index];
 
-        if (color != COLOR_GREEN &&
-            color != COLOR_YELLOW)
+        if (color != GREEN &&
+            color != YELLOW)
         {
-            colors[index] = COLOR_GRAY;
+            colors[index] = GRAY;
             printAlphabet(
                 letter,
-                COLOR_GRAY,
+                GRAY,
                 FALSE
             );
         }
@@ -614,37 +633,42 @@ int checkInputAgainstAnswer(
     (*numGuesses)++;
 
     // Save cursor position
-    doCursorAction(SAVE, 0);
+    doCursorAction(
+        SAVE_POS, 
+        0
+    );
 
     // Move cursor to guess position, print board
-    doCursorAction(MOVE_FROM_TOP, *numGuesses);
+    doCursorAction(
+        MOVE_FROM_TOP, 
+        *numGuesses
+    );
 
-    for (int index = 0;
-         index < WORD_LENGTH;
-         index++)
-    {
-        printCharInColor(
-            input[index],
-            colors[index]
-        );
-    }
+    printCharsInColor(
+        input,
+        colors,
+        FALSE
+    );
 
     // Restore cursor position
-    doCursorAction(RESTORE, 0);
+    doCursorAction(
+        RESTORE_POS, 
+        0
+    );
     return numCorrectLetters;
 }
 
 int isLetterInAnswer(
     char letter,
     char* tempAnswer,
-    int* colors
+    Color* colors
 )
 {
     for (int index = 0;
          tempAnswer[index] != '\0';
          index++)
     {
-        if (colors[index] != COLOR_GREEN)
+        if (colors[index] != GREEN)
         {
             if (letter == tempAnswer[index])
             {
@@ -667,17 +691,29 @@ int validateInput(char* input)
         (NUM_VALID_WORDS - 1)
     );
     if (isInDictionary == -1)
-    { 
+    {
         // Save cursor position
-        doCursorAction(SAVE, 0);
+        doCursorAction(
+            SAVE_POS,
+            0
+        );
 
         // Move cursor up one line
-        doCursorAction(MOVE_UP, 1);
+        doCursorAction(
+            MOVE_UP, 
+            1
+        );
 
-        printf("%s not in dictionary!", input);
+        printf(
+            "%s not in dictionary!", 
+            input
+        );
 
         // Restore cursor position
-        doCursorAction(RESTORE, 0);
+        doCursorAction(
+            RESTORE_POS, 
+            0
+        );
 
         return FALSE;
     }
@@ -685,7 +721,7 @@ int validateInput(char* input)
     else
     {
         // Save cursor position
-        doCursorAction(SAVE, 0);
+        doCursorAction(SAVE_POS, 0);
 
         // Move cursor up one line
         doCursorAction(MOVE_UP, 1);
@@ -694,7 +730,7 @@ int validateInput(char* input)
         doCursorAction(CLEAR_LINE, 0);
 
         // Restore cursor position
-        doCursorAction(RESTORE, 0);
+        doCursorAction(RESTORE_POS, 0);
 
         return TRUE;
     }
