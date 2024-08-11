@@ -3,9 +3,12 @@
  * - Try to find a worlde clone online that mimics wordle's
  *      duplicate behavior
  * - What is this hashmap thing chat won't shut up about ;)
+ * - What is an enum
  *
  * NOW:
  * Nicer UI
+ * #define's for virtual terminal sequences
+ * Consolidate color printing functions (pass number of chars?)
  *
  * NEXT STREAM:
  *
@@ -18,24 +21,28 @@
 
 #pragma once
 #include "Chardle.h"
+#include <Windows.h>
 #include <stdio.h>
 #include <assert.h>
 #include <bcrypt.h>
 #include <conio.h>
 
-#define WORD_LENGTH 5
-#define ESCAPE      27
-#define NOT         !
+#define NOT     !
+#define TRUE    1
+#define FALSE   0
+
+#define ESCAPE_KEY      27
+#define NUM_GUESSES     6
 
 #define COLOR_NORMAL    0
 #define COLOR_GREEN     32
 #define COLOR_YELLOW    33
-#define COLOR_GREY      1000
+#define COLOR_GRAY      1000
 
 int validateInput(char* input);
 int checkInputAgainstAnswer(char* input, const char* answer);
-void printText(char text, int color);
-void printString(char* text, int color);
+void printCharInColor(char text, int color);
+void printStringInColor(char* text, int color);
 int isLetterInAnswer(char letter, char* tempAnswer, int* colors);
 void clearScreen(void);
 void printAlphabet(char letter, int color, int print);
@@ -50,7 +57,6 @@ char dictValid[NUM_VALID_WORDS][WORD_LENGTH + 1];
 char dictAnswers[NUM_ANSWERS][WORD_LENGTH + 1];
 
 int globalNumAnswers = NUM_ANSWERS;
-
 int globalNumGuesses = 0;
 
 int main()
@@ -72,6 +78,7 @@ int main()
     );
     assert(result);
 
+    // Main game loop
     int numCorrectLetters = 0;
     int gameStarted = FALSE;
     char* answer = 0;
@@ -80,16 +87,22 @@ int main()
     {
         if (NOT gameStarted)
         {
-            answer = getRandomAnswer();
-            printf("\n\n\n\n\n\n\n\n\n\n");
-            gameStarted = TRUE;
+            int padding = 4;
+            for (int newline = 0;
+                 newline < (NUM_GUESSES + padding);
+                 newline++)
+            {
+                printf("\n");
+            }
 
+            answer = getRandomAnswer();
             printf(
                 "Guess a %d-letter word, or press ESC to quit: ",
                 WORD_LENGTH
             );
-
+            gameStarted = TRUE;
         }
+
         printAlphabet(
             0,
             0,
@@ -106,8 +119,15 @@ int main()
             break;
         }
 
-        int valid = validateInput(buffer);
-        if (valid)
+        // Erase user's current guess
+        printf(
+            "\x1b[%dD\x1b[%dX",
+            WORD_LENGTH,
+            WORD_LENGTH
+        );
+
+        int inputIsValid = validateInput(buffer);
+        if (inputIsValid)
         {
             numCorrectLetters =
                 checkInputAgainstAnswer(
@@ -115,9 +135,6 @@ int main()
                     answer
                 );
         }
-
-        // Todo: Fix this
-        printf("\b\b\b\b\b     \b\b\b\b\b");
 
         // If an end condition has been met
         if (numCorrectLetters == WORD_LENGTH ||
@@ -132,12 +149,15 @@ int main()
             {
                 break;
             }
+
+            // Reset the game if the user wants to play again
             numCorrectLetters = 0;
             globalNumGuesses = 0;
             gameStarted = FALSE;
         }
     }
 
+    // Reset console to prior settings before exiting
     result = SetConsoleMode(
         hOut,
         originalConsoleMode
@@ -170,13 +190,15 @@ int getInput(char* buffer)
             buffer[numEnteredChars] = input;
             numEnteredChars++;
         }
-        else if (input == ESCAPE)
+        else if (input == ESCAPE_KEY)
         {
+            buffer[WORD_LENGTH] = 0;
             return FALSE;
         }
         else if (input == '\r' &&
                  numEnteredChars == WORD_LENGTH)
         {
+            buffer[WORD_LENGTH] = 0;
             return TRUE;
         }
     }
@@ -240,7 +262,7 @@ int endGame(int won, char* answer)
     printf("\x1b[0G");
     if (won)
     {
-        printString(
+        printStringInColor(
             "Congratulations, you've won!\n",
             COLOR_GREEN
         );
@@ -257,7 +279,7 @@ int endGame(int won, char* answer)
     //      quit out
     if (globalNumAnswers == 1)
     {
-        printString(
+        printStringInColor(
             "\nYou have guessed all of the words in the game! "
             "Thanks for playing!\n",
             COLOR_GREEN
@@ -266,12 +288,11 @@ int endGame(int won, char* answer)
     }
 
     // Ask the user if they would like to play again
-    char buffer[MAX_STRING_LENGTH] = { 0 };
     printf(
         "Press any key to play again, or ESC to quit..."
     );
     char input = _getch();
-    if (input == ESCAPE)
+    if (input == ESCAPE_KEY)
     {
         return TRUE;
     }
@@ -369,7 +390,7 @@ void printAlphabet(char letter, int color, int print)
              index < 26;
              index++)
         {
-            printText(
+            printCharInColor(
                 alphabet[index],
                 colors[index]
             );
@@ -386,36 +407,13 @@ void printAlphabet(char letter, int color, int print)
 
 void clearScreen(void)
 {
-    wchar sequences[3][7] = {
-        L"\x1b[2J",
-        L"\x1b[3J",
-        L"\x1b[0;0H"
-    };
-
-    for (int index = 0;
-         index < 3;
-         index++)
-    {
-        wchar* sequence = sequences[index];
-        DWORD sequenceLength = (DWORD) wcslen(sequence);
-        DWORD written = 0;
-        HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        BOOL result = WriteConsoleW(
-            hStdOut,
-            sequence,
-            sequenceLength,
-            &written,
-            NULL
-        );
-        assert(result);
-        assert(written == sequenceLength);
-    }
+    printf("\x1b[2J\x1b[3J\x1b[0;0H");
 }
 
-void printString(char* text, int color)
+void printStringInColor(char* text, int color)
 {
     // We have to use custom RGB to get grey
-    if (color == COLOR_GREY)
+    if (color == COLOR_GRAY)
     {
         printf("\x1b[38;2;103;103;103m%s",
                text);
@@ -437,10 +435,10 @@ void printString(char* text, int color)
     );
 }
 
-void printText(char text, int color)
+void printCharInColor(char text, int color)
 {
     // We have to use custom RGB to get grey
-    if (color == COLOR_GREY)
+    if (color == COLOR_GRAY)
     {
         printf("\x1b[38;2;103;103;103m%c",
                text);
@@ -541,15 +539,14 @@ int checkInputAgainstAnswer(char* input, const char* answer)
         if (color != COLOR_GREEN &&
             color != COLOR_YELLOW)
         {
-            colors[index] = COLOR_GREY;
+            colors[index] = COLOR_GRAY;
             printAlphabet(
                 letter,
-                COLOR_GREY,
+                COLOR_GRAY,
                 FALSE
             );
         }
     }
-
 
     globalNumGuesses++;
 
@@ -565,29 +562,22 @@ int checkInputAgainstAnswer(char* input, const char* answer)
         globalNumGuesses,
         0
     );
-
-    printBoard(input, colors);
+    for (int index = 0;
+         index < WORD_LENGTH;
+         index++)
+    {
+        printCharInColor(
+            input[index],
+            colors[index]
+        );
+    }
 
     // Restore cursor position
     printf(
         "\x1b%d",
         8
     );
-
     return correctLetters;
-}
-
-void printBoard(const char* word, int* colors)
-{
-    for (int index = 0;
-         index < WORD_LENGTH;
-         index++)
-    {
-        printText(
-            word[index],
-            colors[index]
-        );
-    }
 }
 
 int isLetterInAnswer(
@@ -612,42 +602,10 @@ int isLetterInAnswer(
     return FALSE;
 }
 
+// TODO: this can probably be removed if dictionary search
+//          is put somewhere else
 int validateInput(char* input)
 {
-    // Make sure input is 5 characters long
-    int length;
-    for (length = 0;
-         input[length] != '\0';
-         length++)
-    {
-    };
-    if (length != 5)
-    {
-        return FALSE;
-    }
-
-    // Make sure input only contains letters
-    for (int index = 0;
-         index < (length - 1); // Avoid newline character
-         index++)
-    {
-        char letter = input[index];
-
-        // Convert from uppercase if necessary
-        if (letter >= 'A' &&
-            letter <= 'Z')
-        {
-            letter += LOWERCASE_OFFSET;
-            input[index] = letter;
-        }
-
-        // Verify letter is lowercase
-        if (letter < 'a' || letter > 'z')
-        {
-            return FALSE;
-        }
-    }
-
     // Make sure it is in our dictionary
     int isInDictionary = binarySearch(
         input,
