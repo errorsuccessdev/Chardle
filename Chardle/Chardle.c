@@ -40,24 +40,35 @@
 #define COLOR_GRAY      1000
 
 int validateInput(char* input);
-int checkInputAgainstAnswer(char* input, const char* answer);
+int checkInputAgainstAnswer(
+    char* input,
+    const char* answer,
+    int* numGuesses
+);
 void printCharInColor(char text, int color);
 void printStringInColor(char* text, int color);
-int isLetterInAnswer(char letter, char* tempAnswer, int* colors);
+int isLetterInAnswer(
+    char letter, 
+    char* tempAnswer, 
+    int* colors
+);
 void clearScreen(void);
 void printAlphabet(char letter, int color, int print);
-int endGame(int won, char* answer);
+int endGame(int won, char* answer, int numAnswers);
 int binarySearch(const char* guess, int start, int end);
-void printBoard(const char* word, int* colors);
-char* getRandomAnswer(void);
+char* getRandomAnswer(int numAnswers);
 int getInput(char* buffer);
+
+typedef enum
+{
+    MOVE_UP, ERASE, CLEAR_SCREEN, CLEAR_LINE, SAVE, RESTORE,
+    MOVE_FROM_TOP
+} Action;
+void doCursorAction(Action action, int numTimes);
 
 // RESEARCH: Is it bad that these are global?
 char dictValid[NUM_VALID_WORDS][WORD_LENGTH + 1];
 char dictAnswers[NUM_ANSWERS][WORD_LENGTH + 1];
-
-int globalNumAnswers = NUM_ANSWERS;
-int globalNumGuesses = 0;
 
 int main()
 {
@@ -83,6 +94,9 @@ int main()
     int gameStarted = FALSE;
     char* answer = 0;
 
+    int numAnswers = NUM_ANSWERS;
+    int numGuesses = 0;
+
     while (1)
     {
         if (NOT gameStarted)
@@ -95,7 +109,7 @@ int main()
                 printf("\n");
             }
 
-            answer = getRandomAnswer();
+            answer = getRandomAnswer(numAnswers);
             printf(
                 "Guess a %d-letter word, or press ESC to quit: ",
                 WORD_LENGTH
@@ -120,11 +134,7 @@ int main()
         }
 
         // Erase user's current guess
-        printf(
-            "\x1b[%dD\x1b[%dX",
-            WORD_LENGTH,
-            WORD_LENGTH
-        );
+        doCursorAction(ERASE, WORD_LENGTH);
 
         int inputIsValid = validateInput(buffer);
         if (inputIsValid)
@@ -132,18 +142,20 @@ int main()
             numCorrectLetters =
                 checkInputAgainstAnswer(
                     buffer,
-                    answer
+                    answer,
+                    &numGuesses
                 );
         }
 
         // If an end condition has been met
         if (numCorrectLetters == WORD_LENGTH ||
-            globalNumGuesses == NUM_GUESSES)
+            numGuesses == NUM_GUESSES)
         {
             int won = (numCorrectLetters == WORD_LENGTH);
             int shouldEnd = endGame(
                 won,
-                answer
+                answer,
+                numAnswers
             );
             if (shouldEnd)
             {
@@ -152,7 +164,7 @@ int main()
 
             // Reset the game if the user wants to play again
             numCorrectLetters = 0;
-            globalNumGuesses = 0;
+            numGuesses = 0;
             gameStarted = FALSE;
         }
     }
@@ -175,7 +187,7 @@ int getInput(char* buffer)
         {
             if (numEnteredChars > 0)
             {
-                printf("\b \b");
+                doCursorAction(ERASE, 1);
                 numEnteredChars--;
             }
         }
@@ -204,7 +216,66 @@ int getInput(char* buffer)
     }
 }
 
-char* getRandomAnswer(void)
+void doCursorAction(Action action, int numTimes)
+{
+    switch (action)
+    {
+        case MOVE_UP:
+        {
+            printf(
+                "\x1b[%dF",
+                numTimes
+            );
+            break;
+        }
+        case MOVE_FROM_TOP:
+        {
+            printf(
+                "\x1b[%d;%dH",
+                numTimes,
+                0
+            );
+            break;
+        }
+        case ERASE:
+        {
+            printf(
+                "\x1b[%dD\x1b[%dX",
+                numTimes,
+                numTimes
+            );
+            break;
+        }
+        case CLEAR_LINE:
+        {
+            printf("\x1b[2K");
+            break;
+        }
+        case CLEAR_SCREEN:
+        {
+            printf("\x1b[2J\x1b[3J\x1b[0;0H");
+            break;
+        }
+        case SAVE:
+        {
+            printf(
+                "\x1b%d",
+                7
+            );
+            break;
+        }
+        case RESTORE:
+        {
+            printf(
+                "\x1b%d",
+                8
+            );
+            break;
+        }
+    }
+}
+
+char* getRandomAnswer(int numAnswers)
 {
     // Get random word
     unsigned int randomNumber = 0;
@@ -215,7 +286,7 @@ char* getRandomAnswer(void)
         BCRYPT_USE_SYSTEM_PREFERRED_RNG
     );
     assert(status == 0);
-    randomNumber %= globalNumAnswers;
+    randomNumber %= numAnswers;
     char* answer = dictAnswers[randomNumber];
     OutputDebugStringA(answer);
     return answer;
@@ -255,11 +326,10 @@ int binarySearch(const char* guess, int start, int end)
     return mid;
 }
 
-int endGame(int won, char* answer)
+int endGame(int won, char* answer, int numAnswers)
 {
     // Print game end message
-    printf("\x1b[1K");
-    printf("\x1b[0G");
+    doCursorAction(MOVE_UP, 1);
     if (won)
     {
         printStringInColor(
@@ -277,7 +347,7 @@ int endGame(int won, char* answer)
 
     // If they have exhausted the entire answer dictionary,
     //      quit out
-    if (globalNumAnswers == 1)
+    if (numAnswers == 1)
     {
         printStringInColor(
             "\nYou have guessed all of the words in the game! "
@@ -314,13 +384,13 @@ int endGame(int won, char* answer)
     int answerIndex = (int)
         ((answer - dictAnswers[0]) /
          numCharsPerElement);
-    int numAnswersLeft = globalNumAnswers - answerIndex;
+    int numAnswersLeft = numAnswers - answerIndex;
     int numCharsLeft =
         numAnswersLeft * numCharsPerElement;
 
     // Remove the used answer from the array of answers
     for (int index = answerIndex + 1;
-         index < globalNumAnswers;
+         index < numAnswers;
          index++)
     {
         for (int letter = 0;
@@ -331,10 +401,10 @@ int endGame(int won, char* answer)
                 dictAnswers[index][letter];
         }
     }
-    globalNumAnswers--;
+    numAnswers--;
 
     // For debugging purposes, clear the rest of the array
-    for (int index = globalNumAnswers;
+    for (int index = numAnswers;
          index < NUM_ANSWERS;
          index++)
     {
@@ -345,8 +415,7 @@ int endGame(int won, char* answer)
             dictAnswers[index][letter] = 0;
         }
     }
-
-    clearScreen();
+    doCursorAction(CLEAR_SCREEN, 0);
     return FALSE;
 }
 
@@ -377,13 +446,10 @@ void printAlphabet(char letter, int color, int print)
     if (print)
     {
         // Save cursor position
-        printf(
-            "\x1b%d",
-            7
-        );
+        doCursorAction(SAVE, 0);
 
-        // Move cursor up one line
-        printf("\x1b[3F");
+        // Move cursor up n lines
+        doCursorAction(MOVE_UP, 3);
 
         // Print array
         for (int index = 0;
@@ -398,16 +464,9 @@ void printAlphabet(char letter, int color, int print)
         }
 
         // Restore cursor position
-        printf(
-            "\x1b%d",
-            8
-        );
-    }
-}
+        doCursorAction(RESTORE, 0);
 
-void clearScreen(void)
-{
-    printf("\x1b[2J\x1b[3J\x1b[0;0H");
+    }
 }
 
 void printStringInColor(char* text, int color)
@@ -461,9 +520,12 @@ void printCharInColor(char text, int color)
 }
 
 // TODO: This could certainly be refactored into something nicer
-int checkInputAgainstAnswer(char* input, const char* answer)
+int checkInputAgainstAnswer(
+    char* input, 
+    const char* answer,
+    int* numGuesses)
 {
-    int correctLetters = 0;
+    int numCorrectLetters = 0;
     int colors[WORD_LENGTH] = { 0 };
 
     // Check for exactly correct letters
@@ -482,7 +544,7 @@ int checkInputAgainstAnswer(char* input, const char* answer)
                 FALSE
             );
             colors[index] = COLOR_GREEN;
-            correctLetters++;
+            numCorrectLetters++;
         }
     }
 
@@ -548,20 +610,15 @@ int checkInputAgainstAnswer(char* input, const char* answer)
         }
     }
 
-    globalNumGuesses++;
+    // Increment the number of guesses
+    (*numGuesses)++;
 
     // Save cursor position
-    printf(
-        "\x1b%d",
-        7
-    );
+    doCursorAction(SAVE, 0);
 
     // Move cursor to guess position, print board
-    printf(
-        "\x1b[%d;%dH",
-        globalNumGuesses,
-        0
-    );
+    doCursorAction(MOVE_FROM_TOP, *numGuesses);
+
     for (int index = 0;
          index < WORD_LENGTH;
          index++)
@@ -573,11 +630,8 @@ int checkInputAgainstAnswer(char* input, const char* answer)
     }
 
     // Restore cursor position
-    printf(
-        "\x1b%d",
-        8
-    );
-    return correctLetters;
+    doCursorAction(RESTORE, 0);
+    return numCorrectLetters;
 }
 
 int isLetterInAnswer(
@@ -615,21 +669,15 @@ int validateInput(char* input)
     if (isInDictionary == -1)
     { 
         // Save cursor position
-        printf(
-            "\x1b%d",
-            7
-        );
+        doCursorAction(SAVE, 0);
 
         // Move cursor up one line
-        printf("\x1b[1F");
+        doCursorAction(MOVE_UP, 1);
 
         printf("%s not in dictionary!", input);
 
         // Restore cursor position
-        printf(
-            "\x1b%d",
-            8
-        );
+        doCursorAction(RESTORE, 0);
 
         return FALSE;
     }
@@ -637,22 +685,16 @@ int validateInput(char* input)
     else
     {
         // Save cursor position
-        printf(
-            "\x1b%d",
-            7
-        );
+        doCursorAction(SAVE, 0);
 
         // Move cursor up one line
-        printf("\x1b[1F");
+        doCursorAction(MOVE_UP, 1);
 
-        // Delete everything on that line
-        printf("\x1b[2K");
+        // Delete everything
+        doCursorAction(CLEAR_LINE, 0);
 
         // Restore cursor position
-        printf(
-            "\x1b%d",
-            8
-        );
+        doCursorAction(RESTORE, 0);
 
         return TRUE;
     }
