@@ -6,11 +6,15 @@
  * - What is an enum
  *
  * NOW:
- * Nicer alphabet printout
  *
  * NEXT STREAM:
+ * Print loss condition text in color 
+ * Better system for printing RGB colors
  *
  * FUTURE:
+ * Fix duplicate letter not turning green in alphabet
+ * Nicer alphabet printout
+ * Other UI improvements
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -31,10 +35,9 @@
 #define ESCAPE_KEY  27
 #define NUM_GUESSES 6
 
-
 typedef enum enumColor
 {
-    DEFAULT = 0, GREEN = 32, YELLOW = 33, GRAY
+    DEFAULT = 0, GREEN = 32, YELLOW = 33, GRAY, ORANGE
 } Color;
 
 typedef enum enumAction
@@ -51,7 +54,7 @@ typedef struct structLetter
     Color color;
 } Letter;
 
-int validateInput(char* input);
+int isGuessInDictionary(char* guess);
 void printAlphabet(char letter, int color, int print);
 int endGame(int won, char* answer, int numAnswers);
 int binarySearch(const char* guess, int start, int end);
@@ -60,10 +63,8 @@ int getInput(char* buffer);
 void doCursorAction(Action action, int numTimes);
 void printCharsInColor(char* word, Color* colors,
                        int useSingleColor);
-int checkAgainstAnswer(char* input, const char* answer,
+int checkAgainstAnswer(char* guess, const char* answer,
                        int* numGuesses);
-int isLetterInAnswer(char letter, char* tempAnswer,
-                     Color* colors);
 
 // RESEARCH: Is it bad that these are global?
 char dictValid[NUM_VALID_WORDS][WORD_LENGTH + 1];
@@ -133,20 +134,16 @@ int main()
 
         // Erase user's current guess
         doCursorAction(
-            ERASE, 
+            ERASE,
             WORD_LENGTH
         );
 
-        int inputIsValid = validateInput(buffer);
-        if (inputIsValid)
-        {
-            numCorrectLetters =
-                checkAgainstAnswer(
-                    buffer,
-                    answer,
-                    &numGuesses
-                );
-        }
+        numCorrectLetters =
+            checkAgainstAnswer(
+                buffer,
+                answer,
+                &numGuesses
+            );
 
         // If an end condition has been met
         if (numCorrectLetters == WORD_LENGTH ||
@@ -189,7 +186,7 @@ int getInput(char* buffer)
             if (numEnteredChars > 0)
             {
                 doCursorAction(
-                    ERASE, 
+                    ERASE,
                     1
                 );
                 numEnteredChars--;
@@ -215,7 +212,13 @@ int getInput(char* buffer)
                  numEnteredChars == WORD_LENGTH)
         {
             buffer[WORD_LENGTH] = 0;
-            return FALSE;
+            int inDict = isGuessInDictionary(buffer);
+            if (inDict)
+            {
+                return FALSE;
+            }
+            doCursorAction(ERASE, WORD_LENGTH);
+            numEnteredChars = 0;
         }
     }
 }
@@ -335,7 +338,7 @@ int endGame(int won, char* answer, int numAnswers)
 {
     // Print game end message
     doCursorAction(
-        MOVE_UP, 
+        MOVE_UP,
         1
     );
     if (won)
@@ -350,9 +353,11 @@ int endGame(int won, char* answer, int numAnswers)
     else
     {
         // TODO: Add color for this
-        printf(
+        Color orange = ORANGE;
+        printCharsInColor(
             "Sorry, the word was %s.\n",
-            answer
+            &orange,
+            TRUE
         );
     }
 
@@ -498,6 +503,13 @@ void printCharsInColor(
                 word
             );
         }
+        else if (*colors == ORANGE)
+        {
+            printf(
+                "\x1b[38;2;255;119;92m%s",
+                word
+            );
+        }
         else
         {
             printf(
@@ -540,7 +552,7 @@ void printCharsInColor(
 
 // TODO: This could certainly be refactored into something nicer
 int checkAgainstAnswer(
-    char* input,
+    char* guess,
     const char* answer,
     int* numGuesses)
 {
@@ -552,7 +564,7 @@ int checkAgainstAnswer(
          index < WORD_LENGTH;
          index++)
     {
-        char letter = input[index];
+        char letter = guess[index];
 
         // Is letter in the right spot?
         if (letter == answer[index])
@@ -581,15 +593,25 @@ int checkAgainstAnswer(
          index < WORD_LENGTH;
          index++)
     {
-        char letter = input[index];
+        char letter = guess[index];
         if (colors[index] != GREEN)
         {
-            // Is letter in the word at all?
-            if (isLetterInAnswer(
-                letter,
-                tempAnswer,
-                colors
-            ))
+            // Is letter in the answer anywhere?
+            int letterInAnswer = FALSE;
+            for (int index = 0;
+                 tempAnswer[index] != '\0';
+                 index++)
+            {
+                if (colors[index] != GREEN)
+                {
+                    if (letter == tempAnswer[index])
+                    {
+                        tempAnswer[index] = '_';
+                        letterInAnswer = TRUE;
+                    }
+                }
+            }
+            if (letterInAnswer)
             {
                 printAlphabet(
                     letter,
@@ -615,7 +637,7 @@ int checkAgainstAnswer(
          index++)
     {
         int color = colors[index];
-        char letter = input[index];
+        char letter = guess[index];
 
         if (color != GREEN &&
             color != YELLOW)
@@ -634,104 +656,68 @@ int checkAgainstAnswer(
 
     // Save cursor position
     doCursorAction(
-        SAVE_POS, 
+        SAVE_POS,
         0
     );
 
     // Move cursor to guess position, print board
     doCursorAction(
-        MOVE_FROM_TOP, 
+        MOVE_FROM_TOP,
         *numGuesses
     );
 
     printCharsInColor(
-        input,
+        guess,
         colors,
         FALSE
     );
 
     // Restore cursor position
     doCursorAction(
-        RESTORE_POS, 
+        RESTORE_POS,
         0
     );
     return numCorrectLetters;
 }
 
-int isLetterInAnswer(
-    char letter,
-    char* tempAnswer,
-    Color* colors
-)
+int isGuessInDictionary(char* guess)
 {
-    for (int index = 0;
-         tempAnswer[index] != '\0';
-         index++)
-    {
-        if (colors[index] != GREEN)
-        {
-            if (letter == tempAnswer[index])
-            {
-                tempAnswer[index] = '_';
-                return TRUE;
-            }
-        }
-    }
-    return FALSE;
-}
-
-// TODO: this can probably be removed if dictionary search
-//          is put somewhere else
-int validateInput(char* input)
-{
-    // Make sure it is in our dictionary
-    int isInDictionary = binarySearch(
-        input,
+    int inDict = binarySearch(
+        guess,
         0,
         (NUM_VALID_WORDS - 1)
     );
-    if (isInDictionary == -1)
+
+    doCursorAction(
+        SAVE_POS,
+        0
+    );
+    doCursorAction(
+        MOVE_UP,
+        1
+    );
+
+    if (inDict == -1)
     {
-        // Save cursor position
-        doCursorAction(
-            SAVE_POS,
-            0
-        );
-
-        // Move cursor up one line
-        doCursorAction(
-            MOVE_UP, 
-            1
-        );
-
         printf(
-            "%s not in dictionary!", 
-            input
+            "%s not in dictionary!",
+            guess
         );
-
-        // Restore cursor position
-        doCursorAction(
-            RESTORE_POS, 
-            0
-        );
-
-        return FALSE;
+        inDict = FALSE;
     }
-
     else
     {
-        // Save cursor position
-        doCursorAction(SAVE_POS, 0);
-
-        // Move cursor up one line
-        doCursorAction(MOVE_UP, 1);
-
-        // Delete everything
-        doCursorAction(CLEAR_LINE, 0);
-
-        // Restore cursor position
-        doCursorAction(RESTORE_POS, 0);
-
-        return TRUE;
+        doCursorAction(
+            CLEAR_LINE,
+            0
+        );
+        inDict = TRUE;
     }
+
+    doCursorAction(
+        RESTORE_POS,
+        0
+    );
+
+    return inDict;
 }
