@@ -3,17 +3,15 @@
  * - Try to find a worlde clone online that mimics wordle's
  *      duplicate behavior
  * - What is this hashmap thing chat won't shut up about ;)
- * - What is an enum
  *
  * NOW:
  *
  * NEXT STREAM:
- * Print loss condition text in color 
- * Better system for printing RGB colors
+ * Replace calls to printCharactersInColor with directly using
+ *  the string to print something in color
  *
  * FUTURE:
  * Fix duplicate letter not turning green in alphabet
- * Nicer alphabet printout
  * Other UI improvements
  */
 
@@ -37,8 +35,16 @@
 
 typedef enum enumColor
 {
-    DEFAULT = 0, GREEN = 32, YELLOW = 33, GRAY, ORANGE
+    DEFAULT, GREEN, YELLOW, GRAY, ORANGE
 } Color;
+const char* colorStrings[] =
+{
+   "\x1b[0m",                // Defualt
+   "\x1b[32m",               // Green
+   "\x1b[33m",               // Yellow
+   "\x1b[38;2;103;103;103m", // Gray
+   "\x1b[38;2;252;136;3m"    // Orange
+};
 
 typedef enum enumAction
 {
@@ -61,8 +67,6 @@ int binarySearch(const char* guess, int start, int end);
 char* getRandomAnswer(int numAnswers);
 int getInput(char* buffer);
 void doCursorAction(Action action, int numTimes);
-void printCharsInColor(char* word, Color* colors,
-                       int useSingleColor);
 int checkAgainstAnswer(char* guess, const char* answer,
                        int* numGuesses);
 
@@ -101,7 +105,7 @@ int main()
     {
         if (NOT gameStarted)
         {
-            int padding = 4;
+            int padding = 6;
             for (int newline = 0;
                  newline < (NUM_GUESSES + padding);
                  newline++)
@@ -111,7 +115,8 @@ int main()
 
             answer = getRandomAnswer(numAnswers);
             printf(
-                "Guess a %d-letter word, or press ESC to quit: ",
+                "Guess a %d-letter word, "
+                "or press ESC to quit: ",
                 WORD_LENGTH
             );
             gameStarted = TRUE;
@@ -255,7 +260,7 @@ void doCursorAction(Action action, int numTimes)
         }
         case CLEAR_LINE:
         {
-            printf("\x1b[2K");
+            printf("\x1b[2K\x1b[0G");
             break;
         }
         case CLEAR_SCREEN:
@@ -336,28 +341,30 @@ int binarySearch(const char* guess, int start, int end)
 
 int endGame(int won, char* answer, int numAnswers)
 {
-    // Print game end message
+    // Clear input message
+    doCursorAction(
+        CLEAR_LINE,
+        0
+    );
     doCursorAction(
         MOVE_UP,
         1
     );
     if (won)
     {
-        Color green = GREEN;
-        printCharsInColor(
-            "Congratulations, you've won!\n",
-            &green,
-            TRUE
+        printf(
+            "%sCongratulations, you've won!\n%s",
+            colorStrings[GREEN], 
+            colorStrings[DEFAULT]
         );
     }
     else
     {
-        // TODO: Add color for this
-        Color orange = ORANGE;
-        printCharsInColor(
-            "Sorry, the word was %s.\n",
-            &orange,
-            TRUE
+        printf(
+            "%sSorry, the word was %s%s\n",
+            colorStrings[ORANGE],
+            answer,
+            colorStrings[DEFAULT]
         );
     }
 
@@ -365,12 +372,12 @@ int endGame(int won, char* answer, int numAnswers)
     //      quit out
     if (numAnswers == 1)
     {
-        Color green = GREEN;
-        printCharsInColor(
-            "\nYou have guessed all of the words in the game! "
-            "Thanks for playing!\n",
-            &green,
-            TRUE
+        printf(
+            "%s\n"
+            "You have guessed all of the words in the game!\n"
+            "Thanks for playing!\n%s",
+            colorStrings[GREEN],
+            colorStrings[DEFAULT]
         );
         return TRUE;
     }
@@ -443,20 +450,7 @@ int endGame(int won, char* answer, int numAnswers)
 // If they pass 0 as the letter parameter, skip updates
 void printAlphabet(char letter, int color, int print)
 {
-    static char alphabet[26] = { 0 };
     static Color colors[26] = { 0 };
-
-    // Initialize alphabet if necessary
-    if (alphabet[0] == 0)
-    {
-        for (char letter = 'a';
-             letter <= 'z';
-             letter++)
-        {
-            int index = letter - 'a';
-            alphabet[index] = letter;
-        }
-    }
 
     // Update letter color if desired
     if (letter >= 'a' &&
@@ -473,81 +467,40 @@ void printAlphabet(char letter, int color, int print)
         );
         doCursorAction(
             MOVE_UP,
-            3
+            5
         );
-        printCharsInColor(
-            alphabet,
-            colors,
-            FALSE
-        );
-        printf(" ");
+
+        char* order = "qwertyuiop\n asdfghjkl\n  zxcvbnm";
+
+        for (int index = 0;
+             index < 31;
+             index++)
+        {
+            if (order[index] == ' ' ||
+                order[index] == '\n')
+            {
+                printf("%c", order[index]);
+            }
+            else
+            {
+                // Calculate where the next letter on the
+                // keyboard is in the color array
+                int pos = order[index] - 'a';
+
+                // Print the letter and color of that "key"
+                printf(
+                    "%s%c",
+                    colorStrings[colors[pos]],
+                    order[index]
+                );
+                printf(" ");
+            }
+        }
         doCursorAction(
             RESTORE_POS,
             0
         );
     }
-}
-
-void printCharsInColor(
-    char* word,
-    Color* colors,
-    int useSingleColor
-)
-{
-    if (useSingleColor)
-    {
-        if (*colors == GRAY)
-        {
-            printf(
-                "\x1b[38;2;103;103;103m%s",
-                word
-            );
-        }
-        else if (*colors == ORANGE)
-        {
-            printf(
-                "\x1b[38;2;255;119;92m%s",
-                word
-            );
-        }
-        else
-        {
-            printf(
-                "\x1b[%dm%s",
-                *colors,
-                word
-            );
-        }
-    }
-    else
-    {
-        for (int index = 0;
-             word[index] != '\0';
-             index++)
-        {
-            Color color = colors[index];
-            if (color == GRAY)
-            {
-                printf(
-                    "\x1b[38;2;103;103;103m%c",
-                    word[index]
-                );
-            }
-            else
-            {
-                printf(
-                    "\x1b[%dm%c",
-                    color,
-                    word[index]
-                );
-            }
-        }
-    }
-
-    printf(
-        "\x1b[%dm",
-        DEFAULT
-    );
 }
 
 // TODO: This could certainly be refactored into something nicer
@@ -651,28 +604,25 @@ int checkAgainstAnswer(
         }
     }
 
-    // Increment the number of guesses
-    (*numGuesses)++;
-
-    // Save cursor position
+    *numGuesses += 1;
     doCursorAction(
         SAVE_POS,
         0
     );
-
-    // Move cursor to guess position, print board
     doCursorAction(
         MOVE_FROM_TOP,
         *numGuesses
     );
-
-    printCharsInColor(
-        guess,
-        colors,
-        FALSE
-    );
-
-    // Restore cursor position
+    for (int index = 0;
+         index < WORD_LENGTH;
+         index++)
+    {
+        printf(
+            "%s%c",
+            colorStrings[colors[index]],
+            guess[index]
+        );
+    }
     doCursorAction(
         RESTORE_POS,
         0
