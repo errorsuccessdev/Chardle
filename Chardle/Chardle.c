@@ -1,17 +1,16 @@
 /*
  * HOMEWORK:
- * - Try to find a worlde clone online that mimics wordle's
+ * - Try to find a wordle clone online that mimics wordle's
  *      duplicate behavior
  * - What is this hashmap thing chat won't shut up about ;)
  *
  * NOW:
  *
  * NEXT STREAM:
- * Replace calls to printCharactersInColor with directly using
- *  the string to print something in color
+ * "b" in keyboard not updating from yellow after guessing
+ *      table and then banal
  *
  * FUTURE:
- * Fix duplicate letter not turning green in alphabet
  * Other UI improvements
  */
 
@@ -53,15 +52,8 @@ typedef enum enumAction
     SAVE_POS, RESTORE_POS
 } Action;
 
-// TODO: To use or not to use?
-typedef struct structLetter
-{
-    char character;
-    Color color;
-} Letter;
-
 int isGuessInDictionary(char* guess);
-void printAlphabet(char letter, int color, int print);
+void updateKeyboard(char letter, int color, int print);
 int endGame(int won, char* answer, int numAnswers);
 int binarySearch(const char* guess, int start, int end);
 char* getRandomAnswer(int numAnswers);
@@ -113,7 +105,7 @@ int main()
                 printf("\n");
             }
 
-            answer = getRandomAnswer(numAnswers);
+            answer = "banal"; // getRandomAnswer(numAnswers);
             printf(
                 "Guess a %d-letter word, "
                 "or press ESC to quit: ",
@@ -122,7 +114,7 @@ int main()
             gameStarted = TRUE;
         }
 
-        printAlphabet(
+        updateKeyboard(
             0,
             0,
             TRUE
@@ -289,7 +281,7 @@ void doCursorAction(Action action, int numTimes)
 
 char* getRandomAnswer(int numAnswers)
 {
-    // Get random word
+    // Get random answer
     unsigned int randomNumber = 0;
     NTSTATUS status = BCryptGenRandom(
         NULL,
@@ -300,7 +292,9 @@ char* getRandomAnswer(int numAnswers)
     assert(status == 0);
     randomNumber %= numAnswers;
     char* answer = dictAnswers[randomNumber];
+    OutputDebugStringA("\n");
     OutputDebugStringA(answer);
+    OutputDebugStringA("\n");
     return answer;
 }
 
@@ -369,7 +363,7 @@ int endGame(int won, char* answer, int numAnswers)
     }
 
     // If they have exhausted the entire answer dictionary,
-    //      quit out
+    //      quit
     if (numAnswers == 1)
     {
         printf(
@@ -392,17 +386,22 @@ int endGame(int won, char* answer, int numAnswers)
         return TRUE;
     }
 
-    // If they want to continue, reset the game
+    // If they want to continue, reset the keyboard
     for (char letter = 'a';
          letter <= 'z';
          letter++)
     {
-        printAlphabet(
+        updateKeyboard(
             letter,
             DEFAULT,
             FALSE
         );
     }
+
+    doCursorAction(
+        CLEAR_SCREEN,
+        0
+    );
 
     // Move remaining words up in the array
     int numCharsPerElement = WORD_LENGTH + 1;
@@ -440,15 +439,11 @@ int endGame(int won, char* answer, int numAnswers)
             dictAnswers[index][letter] = 0;
         }
     }
-    doCursorAction(
-        CLEAR_SCREEN,
-        0
-    );
     return FALSE;
 }
 
 // If they pass 0 as the letter parameter, skip updates
-void printAlphabet(char letter, int color, int print)
+void updateKeyboard(char letter, int color, int print)
 {
     static Color colors[26] = { 0 };
 
@@ -456,7 +451,11 @@ void printAlphabet(char letter, int color, int print)
     if (letter >= 'a' &&
         letter <= 'z')
     {
-        colors[letter - 'a'] = color;
+        Color currentColor = colors[letter - 'a'];
+        if (currentColor != GREEN)
+        {
+            colors[letter - 'a'] = color;
+        }
     }
 
     if (print)
@@ -509,7 +508,7 @@ int checkAgainstAnswer(
     const char* answer,
     int* numGuesses)
 {
-    int numCorrectLetters = 0;
+    int numExactLetters = 0;
     Color colors[WORD_LENGTH] = { 0 };
 
     // Check for exactly correct letters
@@ -522,85 +521,49 @@ int checkAgainstAnswer(
         // Is letter in the right spot?
         if (letter == answer[index])
         {
-            printAlphabet(
+            updateKeyboard(
                 letter,
                 GREEN,
                 FALSE
             );
             colors[index] = GREEN;
-            numCorrectLetters++;
+            numExactLetters++;
         }
     }
 
-    // Copy answer into tempAnswer so we can modify it
-    char tempAnswer[WORD_LENGTH + 1] = { 0 };
-    for (int index = 0;
-         index < (WORD_LENGTH + 1);
-         index++)
+    // Check for letters in the answer, but not 
+    //      in the right spot
+    int letterAlreadyFound[WORD_LENGTH] = { 0 };
+    for (int guessIndex = 0;
+         guessIndex < WORD_LENGTH;
+         guessIndex++)
     {
-        tempAnswer[index] = answer[index];
-    }
+        char guessLetter = guess[guessIndex];
 
-    // Check for correct letters in incorrect spots
-    for (int index = 0;
-         index < WORD_LENGTH;
-         index++)
-    {
-        char letter = guess[index];
-        if (colors[index] != GREEN)
+        if (colors[guessIndex] == GREEN)
         {
-            // Is letter in the answer anywhere?
-            int letterInAnswer = FALSE;
-            for (int index = 0;
-                 tempAnswer[index] != '\0';
-                 index++)
+            continue;
+        }
+        for (int answerIndex = 0;
+             answerIndex < WORD_LENGTH;
+             answerIndex++)
+        {
+            if (colors[answerIndex] == GREEN ||
+                letterAlreadyFound[answerIndex])
             {
-                if (colors[index] != GREEN)
-                {
-                    if (letter == tempAnswer[index])
-                    {
-                        tempAnswer[index] = '_';
-                        letterInAnswer = TRUE;
-                    }
-                }
+                continue;
             }
-            if (letterInAnswer)
+            if (guessLetter == answer[answerIndex])
             {
-                printAlphabet(
-                    letter,
+                colors[guessIndex] = YELLOW;
+                letterAlreadyFound[answerIndex] = 1;
+                updateKeyboard(
+                    guessLetter,
                     YELLOW,
                     FALSE
                 );
-                colors[index] = YELLOW;
+                break;
             }
-        }
-    }
-
-    // Copy answer into tempAnswer to reset tempAnswer
-    for (int index = 0;
-         index < (WORD_LENGTH + 1);
-         index++)
-    {
-        tempAnswer[index] = answer[index];
-    }
-
-    // Set any letters not in the word to the color grey
-    for (int index = 0;
-         index < WORD_LENGTH;
-         index++)
-    {
-        int color = colors[index];
-        char letter = guess[index];
-
-        if (color != GREEN &&
-            color != YELLOW)
-        {
-            colors[index] = GRAY;
-            printAlphabet(
-                letter,
-                GRAY,
-                FALSE
-            );
         }
     }
 
@@ -627,7 +590,7 @@ int checkAgainstAnswer(
         RESTORE_POS,
         0
     );
-    return numCorrectLetters;
+    return numExactLetters;
 }
 
 int isGuessInDictionary(char* guess)
