@@ -5,13 +5,14 @@
  * - What is this hashmap thing chat won't shut up about ;)
  *
  * NOW:
+ * Review answer array
+ * Do not update correctly guessed keys
  *
- * NEXT STREAM:
- * "b" in keyboard not updating from yellow after guessing
- *      table and then banal
+ * SOON:
+ * Test in pwsh
  *
  * FUTURE:
- * Other UI improvements
+ * Allow playing the game by clicking the exe?
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -49,7 +50,8 @@ typedef enum enumAction
 {
     MOVE_UP, MOVE_FROM_TOP,
     ERASE, CLEAR_SCREEN, CLEAR_LINE,
-    SAVE_POS, RESTORE_POS
+    SAVE_POS, RESTORE_POS,
+    USE_ALT_BUFFER, USE_MAIN_BUFFER
 } Action;
 
 int isGuessInDictionary(char* guess);
@@ -85,6 +87,11 @@ int main()
     );
     assert(result);
 
+    doCursorAction(
+        USE_ALT_BUFFER, 
+        0
+    );
+
     // Main game loop
     int numCorrectLetters = 0;
     int gameStarted = FALSE;
@@ -105,11 +112,23 @@ int main()
                 printf("\n");
             }
 
-            answer = "banal"; // getRandomAnswer(numAnswers);
+            answer = getRandomAnswer(numAnswers);
             printf(
-                "Guess a %d-letter word, "
-                "or press ESC to quit: ",
+                "Guess a %d-letter word: ",
                 WORD_LENGTH
+            );
+            doCursorAction(
+                SAVE_POS, 
+                0
+            );
+            printf(
+                "%s\n\nPress escape to quit%s",
+                colorStrings[GRAY],
+                colorStrings[DEFAULT]
+            );
+            doCursorAction(
+                RESTORE_POS,
+                0
             );
             gameStarted = TRUE;
         }
@@ -146,6 +165,11 @@ int main()
         if (numCorrectLetters == WORD_LENGTH ||
             numGuesses == NUM_GUESSES)
         {
+            updateKeyboard(
+                0,
+                0,
+                TRUE
+            );
             int won = (numCorrectLetters == WORD_LENGTH);
             int shouldEnd = endGame(
                 won,
@@ -163,6 +187,10 @@ int main()
             gameStarted = FALSE;
         }
     }
+    doCursorAction(
+        USE_MAIN_BUFFER,
+        0
+    );
 
     // Reset console to prior settings before exiting
     result = SetConsoleMode(
@@ -274,6 +302,16 @@ void doCursorAction(Action action, int numTimes)
                 "\x1b%d",
                 8 // Restore cursor position
             );
+            break;
+        }
+        case USE_ALT_BUFFER:
+        {
+            printf("\x1b[?1049h");
+            break;
+        }
+        case USE_MAIN_BUFFER:
+        {
+            printf("\x1b[?1049l");
             break;
         }
     }
@@ -452,10 +490,7 @@ void updateKeyboard(char letter, int color, int print)
         letter <= 'z')
     {
         Color currentColor = colors[letter - 'a'];
-        if (currentColor != GREEN)
-        {
-            colors[letter - 'a'] = color;
-        }
+        colors[letter - 'a'] = color;
     }
 
     if (print)
@@ -495,6 +530,7 @@ void updateKeyboard(char letter, int color, int print)
                 printf(" ");
             }
         }
+        printf("%s", colorStrings[DEFAULT]);
         doCursorAction(
             RESTORE_POS,
             0
@@ -502,7 +538,6 @@ void updateKeyboard(char letter, int color, int print)
     }
 }
 
-// TODO: This could certainly be refactored into something nicer
 int checkAgainstAnswer(
     char* guess,
     const char* answer,
@@ -510,6 +545,12 @@ int checkAgainstAnswer(
 {
     int numExactLetters = 0;
     Color colors[WORD_LENGTH] = { 0 };
+    for (int index = 0;
+         index < WORD_LENGTH;
+         index++)
+    {
+        colors[index] = GRAY;
+    }
 
     // Check for exactly correct letters
     for (int index = 0;
@@ -538,10 +579,12 @@ int checkAgainstAnswer(
          guessIndex < WORD_LENGTH;
          guessIndex++)
     {
+        int letterInAnswer = FALSE;
         char guessLetter = guess[guessIndex];
 
         if (colors[guessIndex] == GREEN)
         {
+            letterInAnswer = TRUE;
             continue;
         }
         for (int answerIndex = 0;
@@ -556,14 +599,23 @@ int checkAgainstAnswer(
             if (guessLetter == answer[answerIndex])
             {
                 colors[guessIndex] = YELLOW;
-                letterAlreadyFound[answerIndex] = 1;
+                letterAlreadyFound[answerIndex] = TRUE;
                 updateKeyboard(
                     guessLetter,
                     YELLOW,
                     FALSE
                 );
+                letterInAnswer = TRUE;
                 break;
             }
+        }
+        if (NOT letterInAnswer)
+        {
+            updateKeyboard(
+                guessLetter,
+                GRAY,
+                FALSE
+            );
         }
     }
 
@@ -586,6 +638,7 @@ int checkAgainstAnswer(
             guess[index]
         );
     }
+    printf("%s", colorStrings[DEFAULT]);
     doCursorAction(
         RESTORE_POS,
         0
