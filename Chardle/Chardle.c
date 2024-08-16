@@ -1,21 +1,17 @@
 /*
  * HOMEWORK:
- * - Try to find a wordle clone online that mimics wordle's
- *      duplicate behavior
- * - What is this hashmap thing chat won't shut up about ;)
- *
+ * 
  * NOW:
- * Review answer array
- * Do not update correctly guessed keys
  *
  * SOON:
- * Test in pwsh
+ * Testing
  *
  * FUTURE:
- * Allow playing the game by clicking the exe?
+ * 
  */
 
 #define WIN32_LEAN_AND_MEAN
+#define _CRT_SECURE_NO_WARNINGS
 
 #pragma comment( lib, "bcrypt" )
 
@@ -113,6 +109,11 @@ int main()
             }
 
             answer = getRandomAnswer(numAnswers);
+            if (NOT answer)
+            {
+                break;
+            }
+
             printf(
                 "Guess a %d-letter word: ",
                 WORD_LENGTH
@@ -187,6 +188,7 @@ int main()
             gameStarted = FALSE;
         }
     }
+
     doCursorAction(
         USE_MAIN_BUFFER,
         0
@@ -327,12 +329,31 @@ char* getRandomAnswer(int numAnswers)
         sizeof(unsigned int),
         BCRYPT_USE_SYSTEM_PREFERRED_RNG
     );
-    assert(status == 0);
+
+    // If there is a problem getting a random number,
+    //      quit out immediately
+    if (status != 0)
+    {
+        char errorMessage[50] = { 0 };
+        sprintf(
+            errorMessage,
+            "BCryptGenRandom returned %d. Exiting.\n",
+            status
+        );
+        OutputDebugStringA(
+            errorMessage
+        );
+        return NULL;
+    }
     randomNumber %= numAnswers;
     char* answer = dictAnswers[randomNumber];
-    OutputDebugStringA("\n");
-    OutputDebugStringA(answer);
-    OutputDebugStringA("\n");
+    char answerMessage[WORD_LENGTH + 3] = { 0 };
+    sprintf(
+        answerMessage, 
+        "\n%s\n", 
+        answer
+    );
+    OutputDebugStringA(answerMessage);
     return answer;
 }
 
@@ -490,7 +511,29 @@ void updateKeyboard(char letter, int color, int print)
         letter <= 'z')
     {
         Color currentColor = colors[letter - 'a'];
-        colors[letter - 'a'] = color;
+        int shouldUpdate = FALSE;
+        switch (currentColor)
+        {
+            case GREEN:
+            {
+                shouldUpdate = (color == DEFAULT);
+                break;
+            }
+            case YELLOW:
+            {
+                shouldUpdate = (color != GRAY);
+                break;
+            }
+            default:
+            {
+                shouldUpdate = TRUE;
+                break;
+            }
+        }
+        if (shouldUpdate)
+        {
+            colors[letter - 'a'] = color;
+        }
     }
 
     if (print)
