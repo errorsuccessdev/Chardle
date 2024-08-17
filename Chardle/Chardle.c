@@ -1,16 +1,28 @@
 /*
- * TODOs:
- *
- * Testing
- *
- */
+* Chardle
+*
+* Copyright (C) 2024 ERROR_SUCCESS Software
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 
+#pragma once
 #pragma comment( lib, "bcrypt" )
 
-#pragma once
 #include "Chardle.h"
 #include <Windows.h>
 #include <stdio.h>
@@ -24,6 +36,7 @@
 #define ESCAPE_KEY  27
 #define NUM_GUESSES 6
 
+// Console colors
 typedef enum enumColor
 {
     DEFAULT, GREEN, YELLOW, GRAY, ORANGE
@@ -32,17 +45,23 @@ const char* colorStrings[] =
 {
    "\x1b[0m",                // Defualt
    "\x1b[32m",               // Green
-   "\x1b[33m",               // Yellow
+   "\x1b[38;2;193;156;0m",   // Yellow (PowerShell fix)
    "\x1b[38;2;103;103;103m", // Gray
    "\x1b[38;2;252;136;3m"    // Orange
 };
 
+// Actions performed in the console
 typedef enum enumAction
 {
-    MOVE_UP, MOVE_FROM_TOP,
-    ERASE, CLEAR_SCREEN, CLEAR_LINE,
-    SAVE_POS, RESTORE_POS,
-    USE_ALT_BUFFER, USE_MAIN_BUFFER
+    MOVE_UP,        // Move cursor up n lines from the bottom
+    MOVE_FROM_TOP,  // Move cursor down n lines from the top
+    ERASE,          // Erase n characters from current position
+    CLEAR_SCREEN,   // Clear entire screen
+    CLEAR_LINE,     // Clear entire line
+    SAVE_POS,       // Save the current cursor position
+    RESTORE_POS,    // Restore the previously saved position
+    USE_ALT_BUFFER, // Switch to alternate screen buffer
+    USE_MAIN_BUFFER // Switch to main screen buffer
 } Action;
 
 int isGuessInDictionary(char* guess);
@@ -55,10 +74,13 @@ void doCursorAction(Action action, int numTimes);
 int checkAgainstAnswer(char* guess, const char* answer,
                        int* numGuesses);
 
-// RESEARCH: Is it bad that these are global?
+// Forward declaration of dictionaries found in other files
 char dictValid[NUM_VALID_WORDS][WORD_LENGTH + 1];
 char dictAnswers[NUM_ANSWERS][WORD_LENGTH + 1];
 
+/// @brief  Entry point, sets up console and
+///         runs main game loop
+/// @return 0 on success
 int main()
 {
     // Set output mode to handle virtual terminal sequences
@@ -70,6 +92,8 @@ int main()
         &consoleMode
     );
     assert(result);
+
+    // Save original console mode so we can restore it later
     DWORD originalConsoleMode = consoleMode;
     consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     result = SetConsoleMode(
@@ -78,23 +102,25 @@ int main()
     );
     assert(result);
 
+    // Switch to alternate screen buffer 
+    //      (like launching nano in bash)
     doCursorAction(
         USE_ALT_BUFFER,
         0
     );
 
-    // Main game loop
+    // Setup for main game loop
     int numCorrectLetters = 0;
     int gameStarted = FALSE;
     char* answer = 0;
-
     int numAnswers = NUM_ANSWERS;
     int numGuesses = 0;
-
     while (1)
     {
+        // Start (or restart) the game
         if (NOT gameStarted)
         {
+            // Print whitespace in board area
             int padding = 6;
             for (int newline = 0;
                  newline < (NUM_GUESSES + padding);
@@ -103,12 +129,14 @@ int main()
                 printf("\n");
             }
 
+            // Get answer for this round
             answer = getRandomAnswer(numAnswers);
             if (NOT answer)
             {
                 break;
             }
 
+            // Write guess prompt to console (don't prompt yet)
             printf(
                 "Guess a %d-letter word: ",
                 WORD_LENGTH
@@ -117,6 +145,8 @@ int main()
                 SAVE_POS,
                 0
             );
+
+            // Write quit instructions for the game
             printf(
                 "%s\n\nPress escape to quit%s",
                 colorStrings[GRAY],
@@ -129,12 +159,14 @@ int main()
             gameStarted = TRUE;
         }
 
+        // Draw keyboard
         updateKeyboard(
             0,
             0,
             TRUE
         );
 
+        // Get guess from user
         char buffer[WORD_LENGTH + 1] = { 0 };
         int shouldEnd = getInput(buffer);
 
@@ -150,6 +182,7 @@ int main()
             WORD_LENGTH
         );
 
+        // Get number of letters guessed correctly
         numCorrectLetters =
             checkAgainstAnswer(
                 buffer,
@@ -157,15 +190,19 @@ int main()
                 &numGuesses
             );
 
-        // If an end condition has been met
+        // Check if an end condition has been met
         if (numCorrectLetters == WORD_LENGTH ||
             numGuesses == NUM_GUESSES)
         {
+            // Do a final print of the keyboard
             updateKeyboard(
                 0,
                 0,
                 TRUE
             );
+
+            // Print end message and check if user wants
+            //      to play again
             int won = (numCorrectLetters == WORD_LENGTH);
             int shouldEnd = endGame(
                 won,
@@ -184,12 +221,13 @@ int main()
         }
     }
 
+    // Switch back to main buffer before quitting out
     doCursorAction(
         USE_MAIN_BUFFER,
         0
     );
 
-    // Reset console to prior settings before exiting
+    // Reset console to prior settings
     result = SetConsoleMode(
         hOut,
         originalConsoleMode
@@ -197,57 +235,86 @@ int main()
     assert(result);
 }
 
+/// @brief Gets input from the user, only allowing 
+///         valid characters
+/// @param buffer 
+///         - The buffer to place the guess in
+/// @return Whether to end the game
+///         TRUE to end, FALSE to continue
 int getInput(char* buffer)
 {
-    int numEnteredChars = 0;
+    int numValidChars = 0;
+
+    // Loop until they enter a valid guess or press escape
     while (1)
     {
         char input = _getch();
+
+        // If they press backspace, clear the current character
         if (input == '\b')
         {
-            if (numEnteredChars > 0)
+            if (numValidChars > 0)
             {
                 doCursorAction(
                     ERASE,
                     1
                 );
-                numEnteredChars--;
+                numValidChars--;
             }
         }
+
+        // If they have guessed a valid character, print it
+        //      and put it into buffer
         else if (input >= 'a' &&
                  input <= 'z' &&
-                 numEnteredChars < WORD_LENGTH)
+                 numValidChars < WORD_LENGTH)
         {
             printf(
                 "%c",
                 input
             );
-            buffer[numEnteredChars] = input;
-            numEnteredChars++;
+            buffer[numValidChars] = input;
+            numValidChars++;
         }
+
+        // If they have pressed escape, return TRUE immediately
         else if (input == ESCAPE_KEY)
         {
             buffer[WORD_LENGTH] = 0;
             return TRUE;
         }
+
+        // If they have pressed enter and provided enough valid
+        //      characters, check if guess is in valid dict
         else if (input == '\r' &&
-                 numEnteredChars == WORD_LENGTH)
+                 numValidChars == WORD_LENGTH)
         {
             buffer[WORD_LENGTH] = 0;
             int inDict = isGuessInDictionary(buffer);
+
+            // Guess is valid, return
             if (inDict)
             {
                 return FALSE;
             }
+
+            // Otherwise, erase current guess and reset
+            //      number of valid characters
             doCursorAction(
-                ERASE, 
+                ERASE,
                 WORD_LENGTH
             );
-            numEnteredChars = 0;
+            numValidChars = 0;
         }
     }
 }
 
+/// @brief Performs an action in the console window
+/// @param action 
+///         - Which action to perform
+/// @param numTimes 
+///         - The number of times the action should be
+///             performed, or 0 if not applicable
 void doCursorAction(Action action, int numTimes)
 {
     switch (action)
@@ -317,9 +384,14 @@ void doCursorAction(Action action, int numTimes)
     }
 }
 
+/// @brief Select a random answer from the answers array
+/// @param numAnswers 
+///         - The number of answers left in the array
+/// @return A pointer to the chosen answer in the array
 char* getRandomAnswer(int numAnswers)
 {
-    // Get random answer
+    // Get random number using crypto library
+    // Probably overkill, but I like it
     unsigned int randomNumber = 0;
     NTSTATUS status = BCryptGenRandom(
         NULL,
@@ -343,9 +415,13 @@ char* getRandomAnswer(int numAnswers)
         );
         return NULL;
     }
+
+    // Select a random answer from within the array
     randomNumber %= numAnswers;
     char* answer = dictAnswers[randomNumber];
     char answerMessage[WORD_LENGTH + 3] = { 0 };
+
+    // Print the answer to the debug stream
     sprintf(
         answerMessage,
         "\n%s\n",
@@ -355,6 +431,14 @@ char* getRandomAnswer(int numAnswers)
     return answer;
 }
 
+/// @brief Performs a binary search on the "valid" dictionary
+/// @param guess 
+///         - The guessed word
+/// @param start 
+///         - Where in the array to start the binary search
+/// @param end 
+///         - Where in the array to end the binary search
+/// @return The index of a valid guess, -1 if guess not found
 int binarySearch(const char* guess, int start, int end)
 {
     // The word isn't in the array
@@ -363,6 +447,7 @@ int binarySearch(const char* guess, int start, int end)
         return -1;
     }
 
+    // Perform the binary search
     int mid = end + (start - end) / 2;
     char* midWord = dictValid[mid];
 
@@ -390,13 +475,25 @@ int binarySearch(const char* guess, int start, int end)
     return mid;
 }
 
+/// @brief Prints end game message and checks if user wants
+///         to play again
+/// @param won 
+///         - Whether the user won or lost the current round
+/// @param answer 
+///         - The answer in the current round
+/// @param numAnswers 
+///         - The number of answers in the answer array
+///             This gets decremented in this function
+/// @return TRUE to end the game, FALSE to continue
 int endGame(int won, char* answer, int numAnswers)
 {
-    // Clear input message
+    // Clear guess prompt
     doCursorAction(
         CLEAR_LINE,
         0
     );
+
+    // Print appropriate round end message
     doCursorAction(
         MOVE_UP,
         1
@@ -420,7 +517,7 @@ int endGame(int won, char* answer, int numAnswers)
     }
 
     // If they have exhausted the entire answer 
-    //      dictionary, quit
+    //      dictionary, quit out
     if (numAnswers == 1)
     {
         printf(
@@ -434,8 +531,11 @@ int endGame(int won, char* answer, int numAnswers)
         return TRUE;
     }
 
+    // Ask the user if they would like to play again
     printf("Press any key to play again...");
     char input = _getch();
+
+    // If they press escape, indicate game should end
     if (input == ESCAPE_KEY)
     {
         return TRUE;
@@ -453,21 +553,19 @@ int endGame(int won, char* answer, int numAnswers)
         );
     }
 
+    // Clear the screen
     doCursorAction(
         CLEAR_SCREEN,
         0
     );
 
-    // Move remaining words up in the array
+    // Remove the used answer from the array of answers
+    //  by moving the remaining answers "up" in the array
     int numCharsPerElement = WORD_LENGTH + 1;
     int answerIndex = (int)
         ((answer - dictAnswers[0]) /
          numCharsPerElement);
     int numAnswersLeft = numAnswers - answerIndex;
-    int numCharsLeft =
-        numAnswersLeft * numCharsPerElement;
-
-    // Remove the used answer from the array of answers
     for (int index = answerIndex + 1;
          index < numAnswers;
          index++)
@@ -482,8 +580,7 @@ int endGame(int won, char* answer, int numAnswers)
     }
     numAnswers--;
 
-    // For debugging purposes, 
-    //      clear the rest of the array
+    // For debugging purposes, clear the rest of the array
     for (int index = numAnswers;
          index < NUM_ANSWERS;
          index++)
@@ -498,59 +595,83 @@ int endGame(int won, char* answer, int numAnswers)
     return FALSE;
 }
 
-// If they pass 0 as the letter parameter, skip updates
+/// @brief Tracks state of the keyboard and 
+///         optionally prints it
+/// @param letter 
+///         - The letter to update, optional
+/// @param color 
+///         - The color to assign to that letter, optional
+/// @param print 
+///         - TRUE to print the keyboard, FALSE to not
 void updateKeyboard(char letter, int color, int print)
 {
+    // Track the colors assigned to each letter
     static Color colors[26] = { 0 };
 
-    // Update letter color if desired
+    // Update letter color if a valid letter was indicated
     if (letter >= 'a' &&
         letter <= 'z')
     {
         Color currentColor = colors[letter - 'a'];
         int shouldUpdate = FALSE;
+
+        // Colors should only update in specific cases
         switch (currentColor)
         {
+            // Letters should stay green except in the case
+            //      of a keyboard reset
             case GREEN:
             {
                 shouldUpdate = (color == DEFAULT);
                 break;
             }
+
+            // Letters should not go from yellow to gray
             case YELLOW:
             {
                 shouldUpdate = (color != GRAY);
                 break;
             }
+
+            // Otherwise, update the color
             default:
             {
                 shouldUpdate = TRUE;
                 break;
             }
         }
+
+        // If update condition is met, update the color
         if (shouldUpdate)
         {
             colors[letter - 'a'] = color;
         }
     }
 
+    // Print the keyboard if asked to do so
     if (print)
     {
+        // Save old cursor position
         doCursorAction(
             SAVE_POS,
             0
         );
+
+        // Move into new position to print keyboard
         doCursorAction(
             MOVE_UP,
             5
         );
 
-        char* order = 
+        // Print the keyboard
+        const char* order =
             "qwertyuiop\n asdfghjkl\n  zxcvbnm";
 
         for (int index = 0;
              index < 31;
              index++)
         {
+            // Print whitespace characters immediatley
             if (order[index] == ' ' ||
                 order[index] == '\n')
             {
@@ -571,7 +692,11 @@ void updateKeyboard(char letter, int color, int print)
                 printf(" ");
             }
         }
+
+        // Set color back to default
         printf("%s", colorStrings[DEFAULT]);
+
+        // Restore prior cursor position
         doCursorAction(
             RESTORE_POS,
             0
@@ -579,12 +704,23 @@ void updateKeyboard(char letter, int color, int print)
     }
 }
 
+/// @brief Checks the users guess against the current answer
+/// @param guess 
+///         - The current guess from the user
+/// @param answer 
+///         - The answer for the current round
+/// @param numGuesses 
+///         - The number of guesses so far 
+///             Incremented by this function
+/// @return The number of exactly correct letters
 int checkAgainstAnswer(
     char* guess,
     const char* answer,
     int* numGuesses)
 {
     int numExactLetters = 0;
+
+    // Track color for printing guess in the board
     Color colors[WORD_LENGTH] = { 0 };
     for (int index = 0;
          index < WORD_LENGTH;
@@ -599,8 +735,6 @@ int checkAgainstAnswer(
          index++)
     {
         char letter = guess[index];
-
-        // Is letter in the right spot?
         if (letter == answer[index])
         {
             updateKeyboard(
@@ -613,43 +747,68 @@ int checkAgainstAnswer(
         }
     }
 
-    // Check for letters in the answer, but not 
-    //      in the right spot
+    // Track letters already guessed (for duplicates)
     int letterAlreadyFound[WORD_LENGTH] = { 0 };
+
+    // Check for letters in the answer, but not 
+    //   in the right spot
     for (int guessIndex = 0;
          guessIndex < WORD_LENGTH;
          guessIndex++)
     {
+        // Track if the letter is in the answer for
+        //      updating the keyboard later in the loop
         int letterInAnswer = FALSE;
+
         char guessLetter = guess[guessIndex];
 
+        // If they have already guessed this letter correctly,
+        //      skip it
         if (colors[guessIndex] == GREEN)
         {
             letterInAnswer = TRUE;
             continue;
         }
+
+        // Otherwise, iterate through the answer and check
+        //      if the letter is in the answer
         for (int answerIndex = 0;
              answerIndex < WORD_LENGTH;
              answerIndex++)
         {
+            // If they have already guessed this letter 
+            //  correctly, or we have already found it, 
+            //  skip it
             if (colors[answerIndex] == GREEN ||
                 letterAlreadyFound[answerIndex])
             {
                 continue;
             }
+
+            // Otherwise, if we have found the letter
+            //      in the word
             if (guessLetter == answer[answerIndex])
             {
-                colors[guessIndex] = YELLOW;
+                // Indicate that we have "used" this letter
                 letterAlreadyFound[answerIndex] = TRUE;
+                
+                // Update the color on the board and keyboard
+                colors[guessIndex] = YELLOW;
                 updateKeyboard(
                     guessLetter,
                     YELLOW,
                     FALSE
                 );
+
+                // Do not turn the letter gray on the keyboard
                 letterInAnswer = TRUE;
                 break;
             }
         }
+
+        // If the letter was not found in the answer, turn it 
+        //      gray on the keyboard
+        // The board color array is already gray by default
         if (NOT letterInAnswer)
         {
             updateKeyboard(
@@ -660,11 +819,16 @@ int checkAgainstAnswer(
         }
     }
 
+    // Increment number of guesses 
     *numGuesses += 1;
+
+    // Save current cursor position
     doCursorAction(
         SAVE_POS,
         0
     );
+
+    // Print board
     doCursorAction(
         MOVE_FROM_TOP,
         *numGuesses
@@ -679,10 +843,14 @@ int checkAgainstAnswer(
             guess[index]
         );
     }
+
+    // Reset color to default
     printf(
         "%s",
         colorStrings[DEFAULT]
     );
+
+    // Restore prior cursor position
     doCursorAction(
         RESTORE_POS,
         0
@@ -690,18 +858,27 @@ int checkAgainstAnswer(
     return numExactLetters;
 }
 
+/// @brief Checks if a guess is in the valid dictionary
+/// @param guess 
+///         - The user's guess
+/// @return TRUE if guess is in valid dictionary, FALSE if not
 int isGuessInDictionary(char* guess)
 {
+    // Search for guess in dictionary
     int inDict = binarySearch(
         guess,
         0,
-        (NUM_VALID_WORDS - 1)
+        (NUM_VALID_WORDS - 1) // End is inclusive!
     );
 
+    // Save current position
     doCursorAction(
         SAVE_POS,
         0
     );
+
+    // Print "not in dictionary" message, or clear the
+    //  message if guess is in dictionary
     doCursorAction(
         MOVE_UP,
         1
@@ -724,6 +901,7 @@ int isGuessInDictionary(char* guess)
         inDict = TRUE;
     }
 
+    // Restore prior cursor position
     doCursorAction(
         RESTORE_POS,
         0
