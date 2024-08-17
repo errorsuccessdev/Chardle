@@ -1,13 +1,8 @@
 /*
- * HOMEWORK:
- * 
- * NOW:
+ * TODOs:
  *
- * SOON:
  * Testing
  *
- * FUTURE:
- * 
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -84,7 +79,7 @@ int main()
     assert(result);
 
     doCursorAction(
-        USE_ALT_BUFFER, 
+        USE_ALT_BUFFER,
         0
     );
 
@@ -119,7 +114,7 @@ int main()
                 WORD_LENGTH
             );
             doCursorAction(
-                SAVE_POS, 
+                SAVE_POS,
                 0
             );
             printf(
@@ -244,7 +239,10 @@ int getInput(char* buffer)
             {
                 return FALSE;
             }
-            doCursorAction(ERASE, WORD_LENGTH);
+            doCursorAction(
+                ERASE, 
+                WORD_LENGTH
+            );
             numEnteredChars = 0;
         }
     }
@@ -349,8 +347,8 @@ char* getRandomAnswer(int numAnswers)
     char* answer = dictAnswers[randomNumber];
     char answerMessage[WORD_LENGTH + 3] = { 0 };
     sprintf(
-        answerMessage, 
-        "\n%s\n", 
+        answerMessage,
+        "\n%s\n",
         answer
     );
     OutputDebugStringA(answerMessage);
@@ -407,7 +405,7 @@ int endGame(int won, char* answer, int numAnswers)
     {
         printf(
             "%sCongratulations, you've won!\n%s",
-            colorStrings[GREEN], 
+            colorStrings[GREEN],
             colorStrings[DEFAULT]
         );
     }
@@ -421,13 +419,14 @@ int endGame(int won, char* answer, int numAnswers)
         );
     }
 
-    // If they have exhausted the entire answer dictionary,
-    //      quit
+    // If they have exhausted the entire answer 
+    //      dictionary, quit
     if (numAnswers == 1)
     {
         printf(
             "%s\n"
-            "You have guessed all of the words in the game!\n"
+            "You have guessed all of the words "
+            "in the game!\n"
             "Thanks for playing!\n%s",
             colorStrings[GREEN],
             colorStrings[DEFAULT]
@@ -435,10 +434,7 @@ int endGame(int won, char* answer, int numAnswers)
         return TRUE;
     }
 
-    // Ask the user if they would like to play again
-    printf(
-        "Press any key to play again, or ESC to quit..."
-    );
+    printf("Press any key to play again...");
     char input = _getch();
     if (input == ESCAPE_KEY)
     {
@@ -486,7 +482,8 @@ int endGame(int won, char* answer, int numAnswers)
     }
     numAnswers--;
 
-    // For debugging purposes, clear the rest of the array
+    // For debugging purposes, 
+    //      clear the rest of the array
     for (int index = numAnswers;
          index < NUM_ANSWERS;
          index++)
@@ -547,7 +544,8 @@ void updateKeyboard(char letter, int color, int print)
             5
         );
 
-        char* order = "qwertyuiop\n asdfghjkl\n  zxcvbnm";
+        char* order = 
+            "qwertyuiop\n asdfghjkl\n  zxcvbnm";
 
         for (int index = 0;
              index < 31;
@@ -681,7 +679,10 @@ int checkAgainstAnswer(
             guess[index]
         );
     }
-    printf("%s", colorStrings[DEFAULT]);
+    printf(
+        "%s",
+        colorStrings[DEFAULT]
+    );
     doCursorAction(
         RESTORE_POS,
         0
